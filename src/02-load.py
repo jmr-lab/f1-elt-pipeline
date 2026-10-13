@@ -286,7 +286,15 @@ def create_complete_schema(conn: sqlite3.Connection) -> None:
         season_id INTEGER,
         team_id INTEGER
     );
-    
+
+    CREATE TABLE IF NOT EXISTS _countries_lookup (
+        id INTEGER PRIMARY KEY,
+        country_code TEXT UNIQUE,
+        country TEXT,
+        iso_alpha3 TEXT,
+        continent TEXT
+    );
+
     -- Indexes
     CREATE INDEX IF NOT EXISTS idx_round_season ON round(season_id);
     CREATE INDEX IF NOT EXISTS idx_round_circuit ON round(circuit_id);
@@ -398,6 +406,34 @@ def filter_empty_tables(dataframes: Dict[str, pd.DataFrame]) -> Dict[str, pd.Dat
     """Filter out empty DataFrames from processing."""
     return {name: df for name, df in dataframes.items() if not df.empty}
 
+def load_static_resources(src_folder: Path, conn: sqlite3.Connection) -> None:
+    """Load static lookup tables from resources folder."""
+    resources_folder = src_folder / "resources"
+    
+    if not resources_folder.exists():
+        print("Resources folder not found, skipping static loads")
+        return
+    
+    # Countries lookup
+    countries_csv = resources_folder / "countries_lookup.csv"
+    if countries_csv.exists():
+        print(f"Loading country lookup from {countries_csv}...")
+        df = pd.read_csv(countries_csv)
+        
+        # Get matching columns
+        cursor = conn.execute("PRAGMA table_info(_countries_lookup);")
+        db_columns = {row[1] for row in cursor.fetchall()}
+        csv_columns = set(df.columns)
+        cols_to_use = list(db_columns & csv_columns)
+        
+        if cols_to_use:
+            df_subset = df[cols_to_use]
+            df_subset.to_sql('_countries_lookup', conn, if_exists='replace', index=False)
+            print(f"  Loaded {len(df_subset)} country mappings")
+        else:
+            print("  WARNING: No matching columns between CSV and DB schema")
+    else:
+        print("Countries lookup file not found")
 
 def build_f1_db(
     extracted_data_path: Path = None,
@@ -490,6 +526,14 @@ def build_f1_db(
         else:
             print("All foreign key constraints validated successfully")
         
+        # Load static resources AFTER all tables are populated
+        print("\n" + "-"*60)
+        print("Loading static resource tables:")
+        print("-"*60)
+
+        src_folder = Path(__file__).resolve().parent
+        load_static_resources(src_folder, conn)
+
         # Summary
         print("\n" + "-"*60)
         print("Final table row counts:")

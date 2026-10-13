@@ -69,13 +69,13 @@ jobs:
       
       - name: Verify outputs
         run: |
-          echo "=== SQL folder contents ==="
-          ls -la sql/
-          
+          echo "=== DB folder contents ==="
+          ls -la data/db/
+    
           echo ""
-          echo "=== Data processed folder contents ==="
-          ls -la data/processed/ 2>/dev/null || echo "No data/processed folder"
-      
+          echo "=== Extract folder contents ==="
+          ls -la data/raw/ 2>/dev/null || echo "No data/raw folder"
+    
       - name: Stage output files
         run: |
           git config user.name 'github-actions[bot]'

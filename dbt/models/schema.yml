@@ -1,0 +1,14 @@
+version: 2
+
+models:
+  - name: f1summary
+    description: "Summary of F1 race results by driver"
+    columns:
+      - name: resultId
+        description: "Unique session entry ID"
+      - name: driverName
+        description: "Driver's full name"
+      - name: year
+        description: "Season year"
+      - name: points
+        description: "Points scored in this race"

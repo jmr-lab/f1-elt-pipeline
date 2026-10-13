@@ -42,7 +42,7 @@ def get_extracted_data_path() -> Path:
 def get_db_folder() -> Path:
     """Return the data/db folder, creating it if needed."""
     src_folder = Path(__file__).resolve().parent
-    db_folder = src_folder.parent / "data" / "db"
+    db_folder = src_folder.parent / "dist"
     db_folder.mkdir(parents=True, exist_ok=True)
     return db_folder
 

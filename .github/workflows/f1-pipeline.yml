@@ -102,7 +102,9 @@ jobs:
           fi
     
       - name: Push changes
-        run: git push
+        run: |
+            git pull --rebase origin main
+            git push
       
       - name: Create release
         uses: ncipollo/release-action@v1
@@ -189,8 +191,10 @@ jobs:
         fi
     
     - name: Push changes
-      run: git push
-    
+      run: |
+        git pull --rebase origin main
+        git push
+
     - name: Create release
       uses: ncipollo/release-action@v1
       with:

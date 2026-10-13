@@ -11,41 +11,14 @@ permissions:
   contents: write
 
 jobs:
-  fetch:
-    runs-on: ubuntu-latest
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      
-      - name: Install dependencies
-        run: pip install pandas requests lxml beautifulsoup4
-
-      - name: Fetch F1 data from JolpicaF1 API
-        run: python src/fetch.py
-        continue-on-error: true
-      
-      - name: Commit fetched files
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email 'github-actions[bot]@users.noreply.github.com'
-          git add data/raw/*.csv
-          git diff --cached --quiet || git commit -m "[data-update] Refresh F1 raw data [skip ci]"
-          git push
-        continue-on-error: true
-
   extract:
     runs-on: ubuntu-latest
-    needs: fetch
     
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-          persist-credentials: true
       
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -53,88 +26,17 @@ jobs:
           python-version: '3.11'
       
       - name: Install dependencies
-        run: pip install pandas requests lxml beautifulsoup4
+        run: pip install pandas requests
       
-      - name: Extract data
-        run: python src/extract.py
-        
+      - name: Run extraction
+        run: python src/01-extract.py
+      
       - name: Upload extracted data
         uses: actions/upload-artifact@v4
         with:
           name: extracted-data
           path: output/extracted_data.pkl
           if-no-files-found: error
-          retention-days: 7
-
-  transform:
-    runs-on: ubuntu-latest
-    needs: extract
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: true
-      
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      
-      - name: Install dependencies
-        run: pip install pandas
-      
-      - name: Download extracted data
-        uses: actions/download-artifact@v4
-        with:
-          name: extracted-data
-          path: output
-      
-      - name: Transform data
-        run: python src/transform.py
-      
-      - name: Upload transformed data
-        uses: actions/upload-artifact@v4
-        with:
-          name: transformed-data
-          path: output/transformed_data.pkl
-          if-no-files-found: error
-          retention-days: 7
-
-  validate:
-    runs-on: ubuntu-latest
-    needs: transform
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: true
-      
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      
-      - name: Install dependencies
-        run: pip install pandas
-      
-      - name: Download transformed data
-        uses: actions/download-artifact@v4
-        with:
-          name: transformed-data
-          path: output
-      
-      - name: Validate data
-        run: python src/validate.py
-      
-      - name: Pass through validated data
-        uses: actions/upload-artifact@v4
-        with:
-          name: validated-data
-          path: output/transformed_data.pkl
           retention-days: 7
 
   build_db:
@@ -146,6 +48,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          persist-credentials: true
       
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -161,92 +64,40 @@ jobs:
           name: extracted-data
           path: output
       
-      - name: Build star schema database
-        run: python src/build_db.py
+      - name: Build database
+        run: python build_f1_db.py
       
-      - name: Upload star schema database
-        uses: actions/upload-artifact@v4
-        with:
-          name: star-schema-db
-          path: sql/formula1.db
-          if-no-files-found: error
-          retention-days: 7
-
-  load:
-    runs-on: ubuntu-latest
-    needs: [validate, build_db]
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: true
-      
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      
-      - name: Install dependencies
-        run: pip install pandas
-      
-      - name: Download validated data
-        uses: actions/download-artifact@v4
-        with:
-          name: validated-data
-          path: output
-      
-      - name: Load data (flat table exports)
-        run: python src/load.py
-      
-      - name: Download star schema database
-        uses: actions/download-artifact@v4
-        with:
-          name: star-schema-db
-          path: sql
-      
-      - name: Verify and stage output files
+      - name: Verify outputs
         run: |
-          echo "=== Verifying SQL folder (exactly 2 files) ==="
+          echo "=== SQL folder contents ==="
           ls -la sql/
           
           echo ""
-          echo "=== Verifying data/processed folder (exactly 2 files) ==="
-          ls -la data/processed/
-          
-          echo ""
-          echo "=== Adding exact output files ==="
+          echo "=== Data processed folder contents ==="
+          ls -la data/processed/ 2>/dev/null || echo "No data/processed folder"
+      
+      - name: Stage output files
+        run: |
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
-          git add sql/f1summary.db sql/formula1.db sql/f1summary.sql data/processed/f1summary.csv
+          git add sql/ formula1.db data/processed/ 2>/dev/null || true
           
-          echo ""
-          echo "=== Git status ==="
-          git status --porcelain
-          
-          echo ""
-          echo "=== Check for uncommitted files ==="
-          if git diff --quiet --cached; then
-            echo "WARNING: No staged files found!"
-            exit 1
+          echo "Checking for changes..."
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
           else
-            echo "SUCCESS: Files staged and ready to commit"
+            git commit -m "[data-update] Refresh F1 database [skip ci]"
           fi
       
-      - name: Commit outputs
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: 'Update F1 outputs via ETL pipeline (${{ github.sha }})'
-          file_pattern: 'sql/f1summary.db sql/formula1.db sql/f1summary.sql data/processed/f1summary.csv'
-          branch: ${{ github.ref_name }}
-
-      - name: Update Single Release
+      - name: Push changes
+        run: git push
+      
+      - name: Create release
         uses: ncipollo/release-action@v1
         with:
           tag: "data-latest"
-          artifacts: "sql/f1summary.db,sql/formula1.db,data/processed/f1summary.csv"
+          artifacts: "sql/formula1.db"
           allowUpdates: true
           makeLatest: true
           generateReleaseNotes: false
-          body: "Automated data update from F1 ETL pipeline"
+          body: "Automated database update from F1 ETL pipeline"

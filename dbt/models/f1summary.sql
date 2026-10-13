@@ -34,22 +34,22 @@ SELECT
         replace(lower(tc_map.country), ' ', '-') ||
         '-50.png'                AS constructorImage
 
-FROM {{ ref('session_entry') }} se
-INNER JOIN {{ ref('session') }} s
+FROM session_entry se
+INNER JOIN session s
     ON se.session_id = s.id
-INNER JOIN {{ ref('roundentry') }} re
+INNER JOIN roundentry re
     ON se.round_entry_id = re.id
-INNER JOIN {{ ref('team_driver') }} td
+INNER JOIN team_driver td
     ON re.team_driver_id = td.id
-INNER JOIN {{ ref('driver') }} d
+INNER JOIN driver d
     ON td.driver_id = d.id
-INNER JOIN {{ ref('team') }} t
+INNER JOIN team t
     ON td.team_id = t.id
-INNER JOIN {{ ref('season') }} ssn
+INNER JOIN season ssn
     ON td.season_id = ssn.id
-INNER JOIN {{ ref('round') }} rnd
+INNER JOIN round rnd
     ON re.round_id = rnd.id
-LEFT JOIN {{ ref('driver_championship') }} dc
+LEFT JOIN driver_championship dc
     ON dc.driver_id = d.id
    AND dc.session_id = s.id
 LEFT JOIN _countries_lookup dc_map

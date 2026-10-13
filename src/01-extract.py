@@ -63,19 +63,25 @@ def fetch_all() -> bool:
     """
     dump_url = "https://api.jolpi.ca/data/dumps/download/delayed/?dump_type=csv"
     output_folder = Path(__file__).resolve().parent.parent / "data" / "raw"
+    output_folder_pickles = output_folder.parent / "output"
+    pickle_path = output_folder_pickles / "extracted_data.pkl"
     
-    # Ensure output folder exists
+    # Ensure output folders exist
     output_folder.mkdir(parents=True, exist_ok=True)
+    output_folder_pickles.mkdir(parents=True, exist_ok=True)
     
     # Check data freshness before downloading
     should_download, message = check_data_freshness(output_folder, days_threshold=7)
     
     if not should_download:
         print(message)
-        print("Skipping download - data is still fresh")
-        print(f"{'='*50}")
-        print(f"Database refresh skipped")
-        print(f"{'='*50}")
+        
+        # Always create/update pickle even when skipping download
+        print("Creating pickle from existing CSV files...")
+        save_csvs_as_pickle(output_folder, pickle_path)
+        
+        print("Database refresh skipped")
+        print("="*50)
         return True
     
     print(message)
@@ -182,11 +188,9 @@ def fetch_all() -> bool:
             print("  They may be named differently in the dump")
         
         # Create pickle file for database builder (NEW)
-        output_folder_pickles = output_folder.parent / "output"
-        pickle_path = output_folder_pickles / "extracted_data.pkl"
         save_csvs_as_pickle(output_folder, pickle_path)
         
-        print(f"\n" + "="*50)
+        print("\n" + "="*50)
         print(f"Database download complete: {moved_count} files fetched")
         print("="*50)
         

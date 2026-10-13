@@ -39,7 +39,7 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
-  build_db:
+  load:
     runs-on: ubuntu-latest
     needs: extract
     
@@ -65,7 +65,7 @@ jobs:
           path: output
       
       - name: Build database
-        run: python build_f1_db.py
+        run: python src/02-load.py
       
       - name: Verify outputs
         run: |

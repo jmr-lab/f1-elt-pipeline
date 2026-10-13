@@ -39,12 +39,12 @@ def get_extracted_data_path() -> Path:
     output_folder = src_folder.parent / "output"
     return output_folder / "extracted_data.pkl"
 
-def get_sql_folder() -> Path:
-    """Return the sql folder, creating it if needed."""
+def get_db_folder() -> Path:
+    """Return the data/db folder, creating it if needed."""
     src_folder = Path(__file__).resolve().parent
-    sql_folder = src_folder.parent / "sql"
-    sql_folder.mkdir(parents=True, exist_ok=True)
-    return sql_folder
+    db_folder = src_folder.parent / "data" / "db"
+    db_folder.mkdir(parents=True, exist_ok=True)
+    return db_folder
 
 def create_complete_schema(conn: sqlite3.Connection) -> None:
     """Create the normalized F1 database schema with FK constraints."""
@@ -410,8 +410,8 @@ def build_f1_db(
         extracted_data_path = get_extracted_data_path()
     
     if output_db_path is None:
-        sql_folder = get_sql_folder()
-        output_db_path = sql_folder / "formula1.db"
+        db_folder = get_db_folder()
+        output_db_path = db_folder / "formula1.db"
     
     if not extracted_data_path.exists():
         raise FileNotFoundError(

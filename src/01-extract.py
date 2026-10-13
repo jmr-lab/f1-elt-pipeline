@@ -4,6 +4,8 @@ from pathlib import Path
 import requests
 import zipfile
 import shutil
+import pickle
+import pandas as pd
 from datetime import datetime
 
 def check_data_freshness(output_folder: Path, days_threshold: int = 7) -> tuple[bool, str]:
@@ -35,6 +37,22 @@ def check_data_freshness(output_folder: Path, days_threshold: int = 7) -> tuple[
         return False, f"Most recent file ({newest_file.name}) is {age_days} day(s) old (threshold: {days_threshold} days)"
     else:
         return True, f"Most recent file ({newest_file.name}) is {age_days} day(s) old (threshold: {days_threshold} days)"
+
+def save_csvs_as_pickle(data_folder: Path, output_path: Path) -> None:
+    """Load all CSVs from folder and save as pickle for database builder."""
+    dataframes = {}
+    
+    for csv_file in data_folder.glob("*.csv"):
+        df = pd.read_csv(csv_file)
+        table_name = csv_file.stem
+        dataframes[table_name] = df
+    
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    
+    with open(output_path, "wb") as f:
+        pickle.dump(dataframes, f)
+    
+    print(f"Saved pickle with {len(dataframes)} tables: {output_path}")
 
 def fetch_all() -> bool:
     """
@@ -162,6 +180,11 @@ def fetch_all() -> bool:
         if missing:
             print(f"\nWarning: Missing expected files: {missing}")
             print("  They may be named differently in the dump")
+        
+        # Create pickle file for database builder (NEW)
+        output_folder_pickles = output_folder.parent / "output"
+        pickle_path = output_folder_pickles / "extracted_data.pkl"
+        save_csvs_as_pickle(output_folder, pickle_path)
         
         print(f"\n" + "="*50)
         print(f"Database download complete: {moved_count} files fetched")

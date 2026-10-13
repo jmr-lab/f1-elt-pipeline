@@ -80,13 +80,17 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
-          git add data/db/ formula1.db data/processed/ 2>/dev/null || true
-          
+          echo "Files to stage:"
+          ls -la data/db/
+    
+          git add data/db/
+    
           echo "Checking for changes..."
+          git status --short
+    
           if git diff --cached --quiet; then
-            echo "No changes to commit"
+            echo "No changes to commit (database identical to previous version)"
           else
-            git status
             git commit -m "[data-update] Refresh F1 database [skip ci]"
           fi
     

@@ -132,7 +132,7 @@ jobs:
     
     - name: Install dbt dependencies
       run: |
-        pip install "dbt-core==1.5.1" "dbt-sqlite==1.5.1"
+        pip install "dbt-core==1.9.1" "dbt-sqlite==1.9.1"
     
     - name: Download database artifact
       uses: actions/download-artifact@v4
@@ -150,9 +150,12 @@ jobs:
             dev:
               type: sqlite
               threads: 1
-              database: data/db/formula1.db
-              schema: main
-        EOF
+              database: 'database'
+              schema: 'main'
+              schemas_and_paths:
+                main: '${GITHUB_WORKSPACE}/data/db/formula1.db'
+              schema_directory: '${GITHUB_WORKSPACE}/data/db'
+        EOF 
     
     - name: Run dbt debug
       working-directory: dbt

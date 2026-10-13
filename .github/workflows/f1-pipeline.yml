@@ -132,7 +132,7 @@ jobs:
     
     - name: Install dbt dependencies
       run: |
-        pip install "dbt-core==1.9.1" "dbt-sqlite==1.9.1"
+        pip install "dbt-core==1.5.1" "dbt-sqlite==1.5.1"
     
     - name: Download database artifact
       uses: actions/download-artifact@v4

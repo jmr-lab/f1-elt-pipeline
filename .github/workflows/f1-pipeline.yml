@@ -155,8 +155,8 @@ jobs:
               schemas_and_paths:
                 main: '${GITHUB_WORKSPACE}/data/db/formula1.db'
               schema_directory: '${GITHUB_WORKSPACE}/data/db'
-        EOF 
-    
+EOF
+
     - name: Run dbt debug
       working-directory: dbt
       run: dbt debug

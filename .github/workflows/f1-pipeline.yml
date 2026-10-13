@@ -108,7 +108,7 @@ jobs:
         uses: ncipollo/release-action@v1
         with:
           tag: "data-latest"
-          artifacts: "sql/formula1.db"
+          artifacts: "data/db/formula1.db"
           allowUpdates: true
           makeLatest: true
           generateReleaseNotes: false
@@ -143,19 +143,19 @@ jobs:
     - name: Initialize dbt profile
       run: |
         mkdir -p ~/.dbt
-        cat > ~/.dbt/profiles.yml << EOF
-        sqlite:
-          target: dev
-          outputs:
-            dev:
-              type: sqlite
-              threads: 1
-              database: 'database'
-              schema: 'main'
-              schemas_and_paths:
-                main: '${GITHUB_WORKSPACE}/data/db/formula1.db'
-              schema_directory: '${GITHUB_WORKSPACE}/data/db'
-EOF
+        printf '%s\n' \
+          'sqlite:' \
+          '  target: dev' \
+          '  outputs:' \
+          '    dev:' \
+          '      type: sqlite' \
+          '      threads: 1' \
+          "      database: 'database'" \
+          "      schema: 'main'" \
+          '      schemas_and_paths:' \
+          "        main: ${GITHUB_WORKSPACE}/data/db/formula1.db" \
+          "      schema_directory: ${GITHUB_WORKSPACE}/data/db" \
+          > ~/.dbt/profiles.yml
 
     - name: Run dbt debug
       working-directory: dbt

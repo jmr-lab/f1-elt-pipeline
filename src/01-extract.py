@@ -62,13 +62,17 @@ def fetch_all() -> bool:
         bool: True if download succeeded, False otherwise
     """
     dump_url = "https://api.jolpi.ca/data/dumps/download/delayed/?dump_type=csv"
+    
+    # Data folder (where CSV files go)
     output_folder = Path(__file__).resolve().parent.parent / "data" / "raw"
-    output_folder_pickles = output_folder.parent / "output"
-    pickle_path = output_folder_pickles / "extracted_data.pkl"
+    
+    # Pickle output folder (repo root / output, NOT data/output)
+    output_pickle_folder = Path(__file__).resolve().parent.parent / "output"
+    pickle_path = output_pickle_folder / "extracted_data.pkl"
     
     # Ensure output folders exist
     output_folder.mkdir(parents=True, exist_ok=True)
-    output_folder_pickles.mkdir(parents=True, exist_ok=True)
+    output_pickle_folder.mkdir(parents=True, exist_ok=True)
     
     # Check data freshness before downloading
     should_download, message = check_data_freshness(output_folder, days_threshold=7)
@@ -187,7 +191,8 @@ def fetch_all() -> bool:
             print(f"\nWarning: Missing expected files: {missing}")
             print("  They may be named differently in the dump")
         
-        # Create pickle file for database builder (NEW)
+        # Create pickle file for database builder
+        print(f"\nCreating pickle: {pickle_path}")
         save_csvs_as_pickle(output_folder, pickle_path)
         
         print("\n" + "="*50)

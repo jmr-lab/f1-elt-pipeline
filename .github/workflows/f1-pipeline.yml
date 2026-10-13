@@ -71,13 +71,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: f1-database
-          path: data/db/formula1.db
+          path: dist/formula1.db
           retention-days: 7
       
       - name: Verify outputs
         run: |
           echo "=== DB folder contents ==="
-          ls -la data/db/
+          ls -la dist/
           
           echo ""
           echo "=== Extract folder contents ==="
@@ -106,7 +106,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: f1-database
-          path: data/db
+          path: dist
       
       - name: Initialize dbt profile
         run: |
@@ -121,8 +121,8 @@ jobs:
             "      database: 'database'" \
             "      schema: 'main'" \
             '      schemas_and_paths:' \
-            "        main: ${GITHUB_WORKSPACE}/data/db/formula1.db" \
-            "      schema_directory: ${GITHUB_WORKSPACE}/data/db" \
+            "        main: ${GITHUB_WORKSPACE}/dist/formula1.db" \
+            "      schema_directory: ${GITHUB_WORKSPACE}/dist" \
             > ~/.dbt/profiles.yml
       
       - name: Run dbt debug
@@ -136,17 +136,17 @@ jobs:
       - name: Verify views created
         run: |
           echo "=== Tables in database ==="
-          sqlite3 data/db/formula1.db ".tables"
+          sqlite3 dist/formula1.db ".tables"
           
           echo ""
           echo "=== f1summary view sample ==="
-          sqlite3 data/db/formula1.db "SELECT COUNT(*) as total FROM f1summary;"
+          sqlite3 dist/formula1.db "SELECT COUNT(*) as total FROM f1summary;"
       
       - name: Create release
         uses: ncipollo/release-action@v1
         with:
           tag: "data-latest"
-          artifacts: "data/db/formula1.db"
+          artifacts: "dist/formula1.db"
           allowUpdates: true
           makeLatest: true
           generateReleaseNotes: false

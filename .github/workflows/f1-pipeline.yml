@@ -117,82 +117,83 @@ jobs:
   transform:
     runs-on: ubuntu-latest
     needs: load
-    
+  
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          persist-credentials: true
-      
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-      
-      - name: Install dbt dependencies
-        run: |
-          pip install dbt-core==1.9.1 dbt-sqlite==1.9.1
-      
-      - name: Download database artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: f1-database
-          path: data/db
-      
-      - name: Initialize dbt profile
-        run: |
-          mkdir -p ~/.dbt
-          cat > ~/.dbt/profiles.yml << EOF
-          sqlite:
-            target: dev
-            outputs:
-              dev:
-                type: sqlite
-                threads: 1
-                database: data/db/formula1.db
-                schemas:
-                  main: main
-          EOF
-      
-      - name: Run dbt
-        working-directory: dbt
-        run: |
-          dbt debug  # Verify connection first
-          dbt run    # Build all models
-      
-      - name: Verify views created
-        run: |
-          echo "=== Tables in database ==="
-          sqlite3 data/db/formula1.db ".tables"
-          
-          echo ""
-          echo "=== f1summary view sample ==="
-          sqlite3 data/db/formula1.db "SELECT COUNT(*) as total FROM f1summary;"
-      
-      - name: Commit updated database
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email 'github-actions[bot]@users.noreply.github.com'
-          git add data/db/
-          
-          echo "Checking for changes..."
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-          else
-            git status
-            git commit -m "[data-update] Create F1 views via dbt [skip ci]"
-          fi
-      
-      - name: Push changes
-        run: git push
-      
-      - name: Create release
-        uses: ncipollo/release-action@v1
-        with:
-          tag: "data-latest"
-          artifacts: "data/db/formula1.db"
-          allowUpdates: true
-          makeLatest: true
-          generateReleaseNotes: false
-          body: "Automated database update from F1 ETL pipeline"
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        persist-credentials: true
+    
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    
+    - name: Install dbt dependencies
+      run: |
+        pip install "dbt-core==1.9.1" "dbt-sqlite==1.9.1"
+    
+    - name: Download database artifact
+      uses: actions/download-artifact@v4
+      with:
+        name: f1-database
+        path: data/db
+    
+    - name: Initialize dbt profile
+      run: |
+        mkdir -p ~/.dbt
+        cat > ~/.dbt/profiles.yml << EOF
+        sqlite:
+          target: dev
+          outputs:
+            dev:
+              type: sqlite
+              threads: 1
+              database: data/db/formula1.db
+              schema: main
+        EOF
+    
+    - name: Run dbt debug
+      working-directory: dbt
+      run: dbt debug
+    
+    - name: Run dbt
+      working-directory: dbt
+      run: dbt run
+    
+    - name: Verify views created
+      run: |
+        echo "=== Tables in database ==="
+        sqlite3 data/db/formula1.db ".tables"
+        
+        echo ""
+        echo "=== f1summary view sample ==="
+        sqlite3 data/db/formula1.db "SELECT COUNT(*) as total FROM f1summary;"
+    
+    - name: Commit updated database
+      run: |
+        git config user.name 'github-actions[bot]'
+        git config user.email 'github-actions[bot]@users.noreply.github.com'
+        git add data/db/
+        
+        echo "Checking for changes..."
+        if git diff --cached --quiet; then
+          echo "No changes to commit"
+        else
+          git status
+          git commit -m "[data-update] Create F1 views via dbt [skip ci]"
+        fi
+    
+    - name: Push changes
+      run: git push
+    
+    - name: Create release
+      uses: ncipollo/release-action@v1
+      with:
+        tag: "data-latest"
+        artifacts: "data/db/formula1.db"
+        allowUpdates: true
+        makeLatest: true
+        generateReleaseNotes: false
+        body: "Automated database update from F1 ETL pipeline"

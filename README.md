@@ -41,7 +41,7 @@ flowchart LR
 
 The workflow consists of three jobs that execute sequentially:
 
-```bash
+```mermaid
 flowchart TD
     extract["Extract<br/>Download Jolpica CSVs"] --> load["Load<br/>Build SQLite DB"]
     load --> transform["Transform<br/>Run dbt Models"]

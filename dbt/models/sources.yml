@@ -2,11 +2,10 @@
 version: 2
 
 sources:
-  - name: main  # <-- Match the actual SQLite database name, NOT an arbitrary label
+  - name: main
     description: "SQLite database with normalized F1 data"
     loader: "Python build script"
-    
-    # Don't specify 'database:' - let it default to the connection
+
     tables:
       - name: season
         description: "F1 racing seasons with metadata"
@@ -24,6 +23,10 @@ sources:
             description: "Jolpiка API identifier"
           - name: championship_system_id
             description: "FK to championship_system"
+            tests:
+              - relationships:
+                  to: source('main', 'championship_system')
+                  field: id
           - name: wikipedia
             description: "Wikipedia page URL"
 
@@ -103,6 +106,10 @@ sources:
             description: "ISO country code"
           - name: base_team_id
             description: "FK to base_team"
+            tests:
+              - relationships:
+                  to: source('main', 'base_team')
+                  field: id
           - name: primary_color
             description: "Primary team color"
           - name: wikipedia
@@ -189,8 +196,16 @@ sources:
               - not_null
           - name: season_id
             description: "FK to season"
+            tests:
+              - relationships:
+                  to: source('main', 'season')
+                  field: id
           - name: circuit_id
             description: "FK to circuit"
+            tests:
+              - relationships:
+                  to: source('main', 'circuit')
+                  field: id
           - name: number
             description: "Round number"
           - name: race_number
@@ -216,10 +231,22 @@ sources:
               - not_null
           - name: season_id
             description: "FK to season"
+            tests:
+              - relationships:
+                  to: source('main', 'season')
+                  field: id
           - name: team_id
             description: "FK to team"
+            tests:
+              - relationships:
+                  to: source('main', 'team')
+                  field: id
           - name: driver_id
             description: "FK to driver"
+            tests:
+              - relationships:
+                  to: source('main', 'driver')
+                  field: id
           - name: role
             description: "Role type"
           - name: api_id
@@ -235,8 +262,16 @@ sources:
               - not_null
           - name: round_id
             description: "FK to round"
+            tests:
+              - relationships:
+                  to: source('main', 'round')
+                  field: id
           - name: team_driver_id
             description: "FK to team_driver"
+            tests:
+              - relationships:
+                  to: source('main', 'team_driver')
+                  field: id
           - name: car_number
             description: "Car number"
           - name: api_id
@@ -252,6 +287,10 @@ sources:
               - not_null
           - name: round_id
             description: "FK to round"
+            tests:
+              - relationships:
+                  to: source('main', 'round')
+                  field: id
           - name: type
             description: "Session type"
           - name: number
@@ -264,6 +303,10 @@ sources:
             description: "Scheduled laps"
           - name: point_system_id
             description: "FK to points_system"
+            tests:
+              - relationships:
+                  to: source('main', 'points_system')
+                  field: id
           - name: is_cancelled
             description: "Cancelled flag"
           - name: has_time_data
@@ -281,8 +324,16 @@ sources:
               - not_null
           - name: session_id
             description: "FK to session"
+            tests:
+              - relationships:
+                  to: source('main', 'session')
+                  field: id
           - name: round_entry_id
             description: "FK to roundentry"
+            tests:
+              - relationships:
+                  to: source('main', 'roundentry')
+                  field: id
           - name: grid
             description: "Grid position"
           - name: position
@@ -316,12 +367,24 @@ sources:
               - not_null
           - name: season_id
             description: "FK to season"
+            tests:
+              - relationships:
+                  to: source('main', 'season')
+                  field: id
           - name: year
             description: "Year"
           - name: driver_id
             description: "FK to driver"
+            tests:
+              - relationships:
+                  to: source('main', 'driver')
+                  field: id
           - name: round_id
             description: "FK to round"
+            tests:
+              - relationships:
+                  to: source('main', 'round')
+                  field: id
           - name: position
             description: "Standings position"
           - name: points
@@ -336,6 +399,10 @@ sources:
             description: "Adjustment type"
           - name: session_id
             description: "FK to session"
+            tests:
+              - relationships:
+                  to: source('main', 'session')
+                  field: id
           - name: session_number
             description: "Session number"
           - name: round_number
@@ -386,6 +453,10 @@ sources:
               - not_null
           - name: session_entry_id
             description: "FK to session_entry"
+            tests:
+              - relationships:
+                  to: source('main', 'session_entry')
+                  field: id
           - name: number
             description: "Lap number"
           - name: position
@@ -411,8 +482,16 @@ sources:
               - not_null
           - name: session_entry_id
             description: "FK to session_entry"
+            tests:
+              - relationships:
+                  to: source('main', 'session_entry')
+                  field: id
           - name: lap_id
             description: "FK to lap"
+            tests:
+              - relationships:
+                  to: source('main', 'lap')
+                  field: id
           - name: number
             description: "Pit stop number"
           - name: duration
@@ -459,12 +538,24 @@ sources:
             description: "Jolpiка API identifier"
           - name: driver_id
             description: "FK to driver"
+            tests:
+              - relationships:
+                  to: source('main', 'driver')
+                  field: id
           - name: points
             description: "Points adjustment"
           - name: season_id
             description: "FK to season"
+            tests:
+              - relationships:
+                  to: source('main', 'season')
+                  field: id
           - name: team_id
             description: "FK to team"
+            tests:
+              - relationships:
+                  to: source('main', 'team')
+                  field: id
 
       - name: _countries_lookup
         description: "Country code to country name mapping"
@@ -475,9 +566,3 @@ sources:
               - unique
           - name: country
             description: "Country name"
-          - name: country
-            description: "Country name"
-          - name: iso_alpha3
-            description: "ISO alpha-3 code"
-          - name: continent
-            description: "Continent"

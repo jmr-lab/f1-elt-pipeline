@@ -33,13 +33,14 @@ flowchart LR
 ```
 ### Pipeline Flow:
 
-    Extract — Downloads full Jolpica database dump (17+ CSV tables) with automatic freshness checks
-    Load — Builds normalised SQLite star schema database (formula1.db)
-    Transform — Creates f1summary view via dbt for analytics-ready queries
+1. **Extract** — Downloads full Jolpica database dump (17+ CSV tables) with automatic freshness checks
+2. **Load** — Builds normalised SQLite star schema database (formula1.db)
+3. **Transform** — Creates f1summary view via dbt for analytics-ready queries
 
 ## Workflow Execution
 
 The workflow consists of three jobs that execute sequentially:
+
 ```bash
 flowchart TD
     extract["Extract<br/>Download Jolpica CSVs"] --> load["Load<br/>Build SQLite DB"]
@@ -52,15 +53,15 @@ Each job runs on its own Ubuntu runner. Intermediate artefacts are passed betwee
 
 The workflow runs:
 
-    Weekly automatically on a scheduled day to refresh the database
-    Manually via the Run workflow button in the Actions tab
+- **Weekly** automatically on a scheduled day to refresh the database
+- **Manually** via the Run workflow button in the Actions tab
 
 ## Job Dependencies
 
 Job	Depends On	Produces
-extract	None	Raw CSV files → extracted-data artefact
-load	extract	formula1.db → f1-database artefact
-transform	load	View-enriched DB → GitHub Release
+| extract | None | Raw CSV files → extracted-data artefact |
+| load | extract | formula1.db → f1-database artefact |
+| transform | load | View-enriched DB → GitHub Release |
 
 ## Features
 

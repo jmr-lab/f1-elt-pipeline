@@ -120,28 +120,30 @@ The database is distributed via:
 ## Database Schema
 
 ### Dimension Tables:
-
-Table	Rows	Purpose
-season	77	Racing seasons (1950–present)
-driver	881	Driver profiles
-team	214	Constructor records
-circuit	78	Track locations
-base_team	0	Team inheritance (empty)
+| Table | Rows | Purpose |
+| ----- | --- | ----------- |
+| season | 77 | Racing seasons (1950–present) |
+| driver | 881 | Driver profiles |
+| team | 214 | Constructor records |
+| circuit | 78 | Track locations |
+| base_team | 0 | Team inheritance (empty) |
 
 ### Fact Tables:
-Table	Rows	Purpose
-session_entry	51,278	Race results (primary fact)
-lap	726,665	Per-lap timing data
-pit_stop	12,842	Pit stop durations
-driver_championship	36,386	Standings snapshots
-team_championship	14,348	Constructor standings
+| Table | Rows | Purpose |
+| ----- | --- | ----------- |
+| session_entry | 51,278 | Race results (primary fact) |
+| lap | 726,665 | Per-lap timing data |
+| pit_stop | 12,842 | Pit stop durations |
+| driver_championship | 36,386 | Standings snapshots |
+| team_championship | 14,348 | Constructor standings |
 
 ### Supporting Tables:
-Table	Rows	Purpose
-round	1,173	Race events
-session	5,130	Practice/Qualifying/Race sessions
-roundentry	27,597	Driver-team-Race assignments
-team_driver	3,630	Driver-team contracts
+| Table | Rows | Purpose |
+| ----- | --- | ----------- |
+| round | 1,173 | Race events |
+| session | 5,130 | Practice/Qualifying/Race sessions |
+| roundentry | 27,597 | Driver-team-Race assignments |
+| team_driver | 3,630 | Driver-team contracts |
 
 ## The f1summary View
 

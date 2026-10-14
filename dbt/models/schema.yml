@@ -1,7 +1,7 @@
 # dbt/models/schema.yml
 version: 2
 
-models:
+sources:
   # Dimension tables
   - name: season
     description: "F1 racing seasons with metadata"
@@ -462,6 +462,7 @@ models:
       - name: team_id
         description: "FK to team"
 
+models:
   # View
   - name: f1summary
     description: "Summary of F1 race results by driver with standings context"
@@ -489,23 +490,3 @@ models:
       
       - name: year
         description: "Season year (excludes current year)"
-
-  # Lookup table
-  - name: _countries_lookup
-    description: "Country code to country name mapping"
-    columns:
-      - name: id
-        description: "Primary key"
-        tests:
-          - unique
-          - not_null
-      - name: country_code
-        description: "ISO country code"
-        tests:
-          - unique
-      - name: country
-        description: "Country name"
-      - name: iso_alpha3
-        description: "ISO alpha-3 code"
-      - name: continent
-        description: "Continent"

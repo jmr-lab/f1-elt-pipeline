@@ -1,11 +1,12 @@
-# dbt/sources.yml
+# dbt/models/sources.yml
 version: 2
 
 sources:
-  - name: f1_database
+  - name: main  # <-- Match the actual SQLite database name, NOT an arbitrary label
     description: "SQLite database with normalized F1 data"
     loader: "Python build script"
     
+    # Don't specify 'database:' - let it default to the connection
     tables:
       - name: season
         description: "F1 racing seasons with metadata"

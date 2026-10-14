@@ -1,3 +1,4 @@
+-- dbt/models/f1summary.sql
 {{ config(materialized='view') }}
 
 SELECT
@@ -34,27 +35,27 @@ SELECT
         replace(lower(tc_map.country), ' ', '-') ||
         '-50.png'                AS constructorImage
 
-FROM {{ source('f1_database', 'session_entry') }} se
-INNER JOIN {{ source('f1_database', 'session') }} s
+FROM {{ source('main', 'session_entry') }} se
+INNER JOIN {{ source('main', 'session') }} s
     ON se.session_id = s.id
-INNER JOIN {{ source('f1_database', 'roundentry') }} re
+INNER JOIN {{ source('main', 'roundentry') }} re
     ON se.round_entry_id = re.id
-INNER JOIN {{ source('f1_database', 'team_driver') }} td
+INNER JOIN {{ source('main', 'team_driver') }} td
     ON re.team_driver_id = td.id
-INNER JOIN {{ source('f1_database', 'driver') }} d
+INNER JOIN {{ source('main', 'driver') }} d
     ON td.driver_id = d.id
-INNER JOIN {{ source('f1_database', 'team') }} t
+INNER JOIN {{ source('main', 'team') }} t
     ON td.team_id = t.id
-INNER JOIN {{ source('f1_database', 'season') }} ssn
+INNER JOIN {{ source('main', 'season') }} ssn
     ON td.season_id = ssn.id
-INNER JOIN {{ source('f1_database', 'round') }} rnd
+INNER JOIN {{ source('main', 'round') }} rnd
     ON re.round_id = rnd.id
-LEFT JOIN {{ source('f1_database', 'driver_championship') }} dc
+LEFT JOIN {{ source('main', 'driver_championship') }} dc
     ON dc.driver_id = d.id
    AND dc.session_id = s.id
-LEFT JOIN {{ source('f1_database', '_countries_lookup') }} dc_map
+LEFT JOIN {{ source('main', '_countries_lookup') }} dc_map
     ON dc_map.country_code = d.country_code
-LEFT JOIN {{ source('f1_database', '_countries_lookup') }} tc_map
+LEFT JOIN {{ source('main', '_countries_lookup') }} tc_map
     ON tc_map.country_code = t.country_code
 WHERE s.type = 'R'
   AND ssn.year < strftime('%Y', 'now')

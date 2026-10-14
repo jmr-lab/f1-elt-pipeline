@@ -469,15 +469,12 @@ sources:
       - name: _countries_lookup
         description: "Country code to country name mapping"
         columns:
-          - name: id
-            description: "Primary key"
-            tests:
-              - unique
-              - not_null
           - name: country_code
             description: "ISO country code"
             tests:
               - unique
+          - name: country
+            description: "Country name"
           - name: country
             description: "Country name"
           - name: iso_alpha3

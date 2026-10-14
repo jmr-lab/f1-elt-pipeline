@@ -34,27 +34,27 @@ SELECT
         replace(lower(tc_map.country), ' ', '-') ||
         '-50.png'                AS constructorImage
 
-FROM session_entry se
-INNER JOIN session s
+FROM {{ source('f1_database', 'session_entry') }} se
+INNER JOIN {{ source('f1_database', 'session') }} s
     ON se.session_id = s.id
-INNER JOIN roundentry re
+INNER JOIN {{ source('f1_database', 'roundentry') }} re
     ON se.round_entry_id = re.id
-INNER JOIN team_driver td
+INNER JOIN {{ source('f1_database', 'team_driver') }} td
     ON re.team_driver_id = td.id
-INNER JOIN driver d
+INNER JOIN {{ source('f1_database', 'driver') }} d
     ON td.driver_id = d.id
-INNER JOIN team t
+INNER JOIN {{ source('f1_database', 'team') }} t
     ON td.team_id = t.id
-INNER JOIN season ssn
+INNER JOIN {{ source('f1_database', 'season') }} ssn
     ON td.season_id = ssn.id
-INNER JOIN round rnd
+INNER JOIN {{ source('f1_database', 'round') }} rnd
     ON re.round_id = rnd.id
-LEFT JOIN driver_championship dc
+LEFT JOIN {{ source('f1_database', 'driver_championship') }} dc
     ON dc.driver_id = d.id
    AND dc.session_id = s.id
-LEFT JOIN _countries_lookup dc_map
+LEFT JOIN {{ source('f1_database', '_countries_lookup') }} dc_map
     ON dc_map.country_code = d.country_code
-LEFT JOIN _countries_lookup tc_map
+LEFT JOIN {{ source('f1_database', '_countries_lookup') }} tc_map
     ON tc_map.country_code = t.country_code
 WHERE s.type = 'R'
   AND ssn.year < strftime('%Y', 'now')

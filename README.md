@@ -159,21 +159,43 @@ GROUP BY driverName
 ORDER BY races DESC;
 ```
 
-Sample output columns:
-| Column | Description |
-| ----- | ----------- |
-| resultId | Unique session entry identifier |
-| grid | Starting grid position |
-| position | Finishing position |
-| points | Race points awarded |
-| laps | Laps completed |
-| year | Season year |
-| round | Race number in season |
-| driverName | Full driver name |
-| driverAge | Age at race date (years) |
-| constructorName | Team name |
-| driverCountry | Driver nationality |
-| status | Finish status (e.g., "Finished", "Lapsed") |
+### Sample output columns:
+
+| Column                 | Type            | Description                                |
+| ---------------------- | --------------- | ------------------------------------------ |
+| `resultId`             | INT             | Unique result identifier                   |
+| `grid`                 | INT             | Starting grid position                     |
+| `positionOrder`        | INT             | Finishing position order                   |
+| `laps`                 | INT             | Number of laps completed in the race       |
+| `rank`                 | INT             | Overall ranking classification             |
+| `status`               | VARCHAR(100)    | Race finish status                         |
+| `points`               | DOUBLE          | Points awarded for the race                |
+| `cumulPoints`          | DOUBLE          | Cumulative driver points at race           |
+| `year`                 | INT             | Season year                                |
+| `round`                | INT             | Round number within season                 |
+| `circuit`              | VARCHAR(255)    | Circuit name                               |
+| `driverName`           | VARCHAR(255)    | Full driver name                           |
+| `driverCountry`        | VARCHAR(100)    | Driver's country of origin                 |
+| `driverAge`            | INT             | Driver age in years at race date           |
+| `constructorName`      | VARCHAR(255)    | Team name                                  |
+| `constructorCountry`   | VARCHAR(100)    | Constructor's country of origin            |
+| `driverImage`          | VARCHAR(255)    | Path to flag icon                          |
+| `constructorImage`     | VARCHAR(255)    | Path to flag icon                          |
+
+### Sample Data
+
+Below is an extract from the output dataset showing a subset of rows and columns (not all data displayed for readability). This excerpt covers the opening races from the 1950 British Grand Prix (the first Formula 1 World Championship race):
+
+| year | round | circuit | status | laps | driverName | constructorName | positionOrder | points |
+| ---- | ----- | ------- | ------ | ---- | ---------- | --------------- | ------------- | ------ |
+| 1950 | 1 | British Grand Prix | Finished | 70 | <img src="https://github.com/jmr-lab/Formula-1/raw/main/images/icons8-italy-50.png" width="20" height="20" /> Nino Farina | <img src="https://github.com/jmr-lab/Formula-1/raw/main/images/icons8-italy-50.png" width="20" height="20" /> Alfa Romeo | 1 | 9 |
+| 1950 | 1 | British Grand Prix | Finished | 70 | <img src="https://github.com/jmr-lab/Formula-1/raw/main/images/icons8-italy-50.png" width="20" height="20" /> Luigi Fagioli | <img src="https://github.com/jmr-lab/Formula-1/raw/main/images/icons8-italy-50.png" width="20" height="20" /> Alfa Romeo | 2 | 6 |
+| 1950 | 1 | British Grand Prix | Finished | 70 | <img src="https://github.com/jmr-lab/Formula-1/raw/main/images/icons8-great-britain-50.png" width="20" height="20" /> Reg Parnell | <img src="https://github.com/jmr-lab/Formula-1/raw/main/images/icons8-italy-50.png" width="20" height="20" /> Alfa Romeo | 3 | 4 |
+| 1950 | 1 | British Grand Prix | Lapsed | 68 | <img src="https://github.com/jmr-lab/Formula-1/raw/main/images/icons8-france-50.png" width="20" height="20" /> Yves Cabantous | <img src="https://github.com/jmr-lab/Formula-1/raw/main/images/icons8-france-50.png" width="20" height="20" /> Talbot-Lago | 4 | 3 |
+| 1950 | 1 | British Grand Prix | Lapsed | 68 | <img src="https://github.com/jmr-lab/Formula-1/raw/main/images/icons8-france-50.png" width="20" height="20" /> Louis Rosier | <img src="https://github.com/jmr-lab/Formula-1/raw/main/images/icons8-france-50.png" width="20" height="20" /> Talbot-Lago | 5 | 2 |
+| 1950 | 1 | British Grand Prix | Lapsed | 67 | <img src="https://github.com/jmr-lab/Formula-1/raw/main/images/icons8-great-britain-50.png" width="20" height="20" /> Bob Gerard | <img src="https://github.com/jmr-lab/Formula-1/raw/main/images/icons8-great-britain-50.png" width="20" height="20" /> ERA | 6 | 0 |
+
+*Full dataset contains 27,238 rows spanning from 1950 to the current year minus one.*
 
 ## Installation
 
@@ -241,9 +263,8 @@ Formula-1 Analytics	R (tidyverse)	EDA, visualisations, GOAT modelling
 ## Why Two Languages?
 
 Separating ETL from analysis delivers practical advantages:
-
-    Python excels at robust data pipelines, batch processing, and database operations
-    R provides superior statistical modelling, visualisation (ggplot2), and exploratory analysis
+- Python excels at robust data pipelines, batch processing, and database operations
+- R provides superior statistical modelling, visualisation (ggplot2), and exploratory analysis
 
 The Python pipeline delivers clean, validated data to the R project, enabling analysts to focus on insights without reinventing the data engineering work.
 
@@ -251,8 +272,8 @@ The Python pipeline delivers clean, validated data to the R project, enabling an
 
 By default, the pipeline skips downloading if the most recent CSV file is less than 7 days old. To force a refresh:
 
-    Delete all files in output/ and run again, or
-    Modify days_threshold in src/01-extract.py to a lower value
+- Delete all files in output/ and run again, or
+- Modify days_threshold in src/01-extract.py to a lower value
 
 ## Troubleshooting
 
@@ -260,42 +281,42 @@ By default, the pipeline skips downloading if the most recent CSV file is less t
 
 If the Jolpica database download fails:
 
-    Check your internet connection
-    Verify the endpoint is accessible:
-
+- Check your internet connection
+- Verify the endpoint is accessible:
+```bash
    curl -I https://api.jolpi.ca/data/dumps/download/delayed/?dump_type=csv
-
-    Retry the workflow manually from the Actions tab
+```
+- Retry the workflow manually from the Actions tab
 
 ### dbt Profile Error
 
 If you encounter schemas_and_paths or profile configuration errors:
 
-    Ensure dbt-sqlite==1.9.1 is installed (compatible with dbt-core 1.9.x)
-    Verify ~/.dbt/profiles.yml was created by the workflow step
-    Check dbt_project.yml references profile: 'sqlite'
+- Ensure dbt-sqlite==1.9.1 is installed (compatible with dbt-core 1.9.x)
+- Verify ~/.dbt/profiles.yml was created by the workflow step
+- Check dbt_project.yml references profile: 'sqlite'
 
 ### No Changes to Commit
 
 If the database hasn't changed since the last run:
 
-    The pipeline will detect this and skip committing
-    This is normal behaviour when Jolpica's data hasn't updated
+- The pipeline will detect this and skip committing
+- This is normal behaviour when Jolpica's data hasn't updated
 
 ## Contributing
 
 Contributions are welcome! If you'd like to enhance the pipeline:
 
-    Fork the repository
-    Create a feature branch
-    Submit a pull request with descriptive changes
+- Fork the repository
+- Create a feature branch
+- Submit a pull request with descriptive changes
 
 Potential improvements:
 
-    Add more dbt models (e.g., qualifying results, constructor points progression)
-    Implement incremental refresh strategy for large tables
-    Generate automated dbt documentation
-    Add integration tests with pytest
+- Add more dbt models (e.g., qualifying results, constructor points progression)
+- Implement incremental refresh strategy for large tables
+- Generate automated dbt documentation
+- Add integration tests with pytest
 
 
 

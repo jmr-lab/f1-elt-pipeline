@@ -106,7 +106,7 @@ f1-etl-pipeline/
 ├── output/
 │   └── extracted_data.pkl     # Intermediate pickle (workflow only)
 └── README.md
-```bash
+```
 
 ## Outputs
 File	Location	Description

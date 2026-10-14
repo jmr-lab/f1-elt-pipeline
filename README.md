@@ -67,25 +67,22 @@ The workflow runs:
 ## Features
 
 1. Extract
-
-    Downloads full F1 database dump from Jolpica (17+ CSV tables)
-    Automatic freshness check (skips download if data < 7 days old)
-    Streaming download for large files (~40MB compressed)
-    Preserves original Ergast/Jolpica table schemas
+- Downloads full F1 database dump from Jolpica (17+ CSV tables)
+- Automatic freshness check (skips download if data < 7 days old)
+- Streaming download for large files (~40MB compressed)
+- Preserves original Ergast/Jolpica table schemas
 
 2. Load
-
-    Normalises raw CSVs into a star schema SQLite database
-    Foreign key validation ensures referential integrity
-    17+ tables including dimensions (driver, team, circuit, season) and facts (session_entry, lap, pit_stop)
-    ~880K rows total covering all F1 races since 1950
+- Normalises raw CSVs into a star schema SQLite database
+- Foreign key validation ensures referential integrity
+- 17+ tables including dimensions (driver, team, circuit, season) and facts (session_entry, lap, pit_stop)
+- ~880K rows total covering all F1 races since 1950
 
 3. Transform
-
-    dbt-powered SQL transformations with dependency tracking
-    Creates f1summary view joining race results with driver/team metadata
-    Derived fields: driver age, cumulative points, country flag image paths
-    Ready for expansion: add models, tests, and documentation via dbt
+- dbt-powered SQL transformations with dependency tracking
+- Creates f1summary view joining race results with driver/team metadata
+- Derived fields: driver age, cumulative points, country flag image paths
+- Ready for expansion: add models, tests, and documentation via dbt
 
 ## Directory Structure
 
@@ -111,13 +108,14 @@ f1-etl-pipeline/
 ```
 
 ## Outputs
-File	Location	Description
-formula1.db	dist/	Normalised SQLite database with f1summary VIEW
+
+| File | Location | Description |
+| ----- | --- | ----------- |
+| formula1.db | dist/ | Normalised SQLite database with f1summary VIEW |
 
 The database is distributed via:
-
-    GitHub Releases — Tagged as data-latest, downloadable from releases page
-    Workflow Artefacts — Available for 7 days after each run
+- GitHub Releases — Tagged as data-latest, downloadable from releases page
+- Workflow Artefacts — Available for 7 days after each run
 
 ## Database Schema
 

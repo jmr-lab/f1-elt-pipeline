@@ -1,4 +1,3 @@
-# dbt/models/schema.yml
 version: 2
 
 models:
@@ -7,24 +6,46 @@ models:
     meta:
       owner: "jmr-lab"
       refresh_schedule: "weekly"
-    
+
     columns:
       - name: resultId
         description: "Unique session entry identifier"
         tests:
           - unique
           - not_null
-      
+      - name: grid
+        description: "Starting grid position"
+      - name: positionOrder
+        description: "Finishing position in the race"
+      - name: cumulPoints
+        description: "Cumulative championship points after this race"
+      - name: points
+        description: "Points awarded in this race"
+      - name: laps
+        description: "Laps completed"
+      - name: rank
+        description: "Fastest lap rank"
+      - name: status
+        description: "Race finish status (Finished, Lapsed, Abandoned, etc.)"
+      - name: year
+        description: "Season year (excludes current year)"
+      - name: round
+        description: "Round number within the season"
+      - name: circuit
+        description: "Circuit/event name"
       - name: driverName
         description: "Driver's full name"
         tests:
           - not_null
-      
-      - name: position
-        description: "Finishing position in the race"
-      
-      - name: points
-        description: "Race points awarded"
-      
-      - name: year
-        description: "Season year (excludes current year)"
+      - name: driverAge
+        description: "Driver age at time of season"
+      - name: constructorName
+        description: "Constructor/team name"
+      - name: driverCountry
+        description: "Driver's country"
+      - name: constructorCountry
+        description: "Constructor's country"
+      - name: driverImage
+        description: "Path to driver's country flag icon"
+      - name: constructorImage
+        description: "Path to constructor's country flag icon"

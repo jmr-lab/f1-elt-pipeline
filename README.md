@@ -148,6 +148,7 @@ The database is distributed via:
 ## The f1summary View
 
 The f1summary view provides an analytics-ready flat table suitable for direct querying:
+```
 SELECT 
     driverName,
     COUNT(*) as races,
@@ -156,21 +157,23 @@ FROM f1summary
 WHERE positionOrder = 1
 GROUP BY driverName
 ORDER BY races DESC;
+```
 
 Sample output columns:
-Column	Description
-resultId	Unique session entry identifier
-grid	Starting grid position
-position	Finishing position
-points	Race points awarded
-laps	Laps completed
-year	Season year
-round	Race number in season
-driverName	Full driver name
-driverAge	Age at race date (years)
-constructorName	Team name
-driverCountry	Driver nationality
-status	Finish status (e.g., "Finished", "Lapsed")
+| Column | Description |
+| ----- | ----------- |
+| resultId | Unique session entry identifier |
+| grid | Starting grid position |
+| position | Finishing position |
+| points | Race points awarded |
+| laps | Laps completed |
+| year | Season year |
+| round | Race number in season |
+| driverName | Full driver name |
+| driverAge | Age at race date (years) |
+| constructorName | Team name |
+| driverCountry | Driver nationality |
+| status | Finish status (e.g., "Finished", "Lapsed") |
 
 ## Installation
 

@@ -148,7 +148,7 @@ The database is distributed via:
 ## The f1summary View
 
 The f1summary view provides an analytics-ready flat table suitable for direct querying:
-```
+```sql
 SELECT 
     driverName,
     COUNT(*) as races,

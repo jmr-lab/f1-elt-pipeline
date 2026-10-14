@@ -1,27 +1,30 @@
+# dbt/models/schema.yml
 version: 2
 
 models:
   - name: f1summary
-    description: "Summary of F1 race results by driver"
+    description: "Summary of F1 race results by driver with standings context"
+    meta:
+      owner: "jmr-lab"
+      refresh_schedule: "weekly"
+    
     columns:
       - name: resultId
-        description: "Unique session entry ID"
+        description: "Unique session entry identifier"
+        tests:
+          - unique
+          - not_null
+      
       - name: driverName
         description: "Driver's full name"
-      - name: year
-        description: "Season year"
+        tests:
+          - not_null
+      
+      - name: position
+        description: "Finishing position in the race"
+      
       - name: points
-        description: "Points scored in this race"
-
-sources:
-  - name: static_resources
-    description: "Static lookup tables maintained in the repository"
-    tables:
-      - name: _countries_lookup
-        description: "Maps country codes to full country names"
-        columns:
-          - name: country_code
-            description: "ISO country code (e.g., GB, DE, FR)"
-            tests:
-              - unique
-              - not_null
+        description: "Race points awarded"
+      
+      - name: year
+        description: "Season year (excludes current year)"

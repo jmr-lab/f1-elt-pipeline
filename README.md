@@ -58,7 +58,8 @@ The workflow runs:
 
 ## Job Dependencies
 
-Job	Depends On	Produces
+| Job | Depends On | Produces |
+| ----- | --- | ----------- |
 | extract | None | Raw CSV files → extracted-data artefact |
 | load | extract | formula1.db → f1-database artefact |
 | transform | load | View-enriched DB → GitHub Release |

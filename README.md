@@ -87,6 +87,7 @@ transform	load	View-enriched DB → GitHub Release
 
 ## Directory Structure
 
+```
 f1-etl-pipeline/
 ├── .github/workflows/
 │   └── f1-etl-pipeline.yml    # CI/CD orchestration
@@ -105,6 +106,7 @@ f1-etl-pipeline/
 ├── output/
 │   └── extracted_data.pkl     # Intermediate pickle (workflow only)
 └── README.md
+```bash
 
 ## Outputs
 File	Location	Description

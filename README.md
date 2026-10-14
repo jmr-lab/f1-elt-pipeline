@@ -6,6 +6,7 @@
 [![dbt](https://img.shields.io/badge/dbt-v1.9-orange.svg)](https://www.getdbt.com/)
 [![dbt Documentation](https://img.shields.io/badge/dbt--docs‑pages‑green)](https://jmr-lab.github.io/f1-etl-pipeline/)
 [![dbt Documentation](https://img.shields.io/badge/dbt-docs-pages-green)](https://jmr-lab.github.io/f1-etl-pipeline/)
+[![dbt Documentation](https://img.shields.io/badge/dbt_docs-pages-green)](https://jmr-lab.github.io/f1-etl-pipeline/)
 
 An ETL pipeline that downloads the official F1 database dump from [Jolpica](https://api.jolpi.ca/) and transforms it into an analytics-ready dataset for Formula 1 analytics and driver GOAT analysis. Built with Python and [dbt](https://www.getdbt.com/) for modular, production-grade data transformations.
 

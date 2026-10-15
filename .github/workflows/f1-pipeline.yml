@@ -245,3 +245,35 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+  publish_databricks:
+    name: Publish to Databricks
+    needs: [transform]
+    runs-on: ubuntu-latest
+    # Databricks being unavailable must not fail the pipeline —
+    # the SQLite file remains the source of truth.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install Databricks SQL connector
+        run: pip install "databricks-sql-connector>=3.0"
+
+      - name: Download transformed database
+        uses: actions/download-artifact@v4
+        with:
+          name: f1-database-transformed
+          path: dist/
+
+      - name: Publish to Databricks
+        env:
+          SQLITE_PATH: dist/formula1.db
+          DATABRICKS_SERVER_HOSTNAME: ${{ secrets.DATABRICKS_SERVER_HOSTNAME }}
+          DATABRICKS_HTTP_PATH: ${{ secrets.DATABRICKS_HTTP_PATH }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          DATABRICKS_CATALOG: ${{ vars.DATABRICKS_CATALOG }}
+        run: python src/04-publish-databricks.py

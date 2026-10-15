@@ -31,18 +31,20 @@ V2_SCHEMA = os.environ.get("JMRLAB_SCHEMA", "jmr_lab")
 VIEW_NAME = "f1summary"
 ROWS_PER_STATEMENT = 500
 
-
 # ---------------------------------------------------------------- helpers
 
 def ident(name: str) -> str:
+    """Backtick-quote an identifier for Databricks."""
     return "`" + name.replace("`", "``") + "`"
 
+def sq_ident(name: str) -> str:
+    """Double-quote an identifier for SQLite."""
+    return '"' + name.replace('"', '""') + '"'
 
 def qualified(schema: str, table: str) -> str:
     if CATALOG:
         return f"{ident(CATALOG)}.{ident(schema)}.{ident(table)}"
     return f"{ident(schema)}.{ident(table)}"
-
 
 def spark_type(sqlite_type: str) -> str:
     """Map a SQLite declared type onto a Spark SQL type."""
@@ -52,7 +54,6 @@ def spark_type(sqlite_type: str) -> str:
     if any(k in t for k in ("REAL", "FLOA", "DOUB", "NUMERIC", "DECIMAL")):
         return "DOUBLE"
     return "STRING"
-
 
 def literal(value) -> str:
     """Render a Python value as a SQL literal."""
@@ -68,14 +69,12 @@ def literal(value) -> str:
         return repr(value)
     return "'" + str(value).replace("'", "''") + "'"
 
-
 def run(cur, sql: str, label: str = "") -> None:
     try:
         cur.execute(sql)
     except Exception as exc:
         print(f"  ✗ {label or sql[:80]}\n    {exc}", file=sys.stderr)
         raise
-
 
 # ---------------------------------------------------------------- migration
 
@@ -85,10 +84,9 @@ def create_schemas(cur) -> None:
         run(cur, f"CREATE SCHEMA IF NOT EXISTS {target}", f"create schema {schema}")
         print(f"  ✓ schema {schema}")
 
-
-def migrate_table(src, cur, schema: str, table: str) -> int:
-    src.execute(f"PRAGMA table_info({ident(table)})")
-    info = src.fetchall()
+def migrate_table(src_cur, dst_cur, schema: str, table: str) -> int:
+    src_cur.execute(f"PRAGMA table_info({sq_ident(table)})")
+    info = src_cur.fetchall()
     if not info:
         print(f"  ! {table}: no columns, skipping")
         return 0
@@ -98,27 +96,27 @@ def migrate_table(src, cur, schema: str, table: str) -> int:
 
     # Full refresh
     target = qualified(schema, table)
-    run(cur, f"DROP TABLE IF EXISTS {target}", f"drop {schema}.{table}")
+    run(dst_cur, f"DROP TABLE IF EXISTS {target}", f"drop {schema}.{table}")
 
     ddl_cols = ",\n  ".join(f"{ident(n)} {spark_type(t)}" for n, t in columns)
-    run(cur, f"CREATE TABLE {target} (\n  {ddl_cols}\n) USING DELTA",
+    run(dst_cur, f"CREATE TABLE {target} (\n  {ddl_cols}\n) USING DELTA",
         f"create {schema}.{table}")
 
     col_list = ", ".join(ident(c) for c in col_names)
-    select_list = ", ".join(ident(c) for c in col_names)
+    select_list = ", ".join(sq_ident(c) for c in col_names)
 
-    src.execute(f"SELECT {select_list} FROM {ident(table)}")
+    src_cur.execute(f"SELECT {select_list} FROM {sq_ident(table)}")
 
     total = 0
     while True:
-        rows = src.fetchmany(ROWS_PER_STATEMENT)
+        rows = src_cur.fetchmany(ROWS_PER_STATEMENT)
         if not rows:
             break
         values = ",\n  ".join(
             "(" + ", ".join(literal(v) for v in row) + ")" for row in rows
         )
         run(
-            cur,
+            dst_cur,
             f"INSERT INTO {target} ({col_list}) VALUES\n  {values}",
             f"insert into {schema}.{table}",
         )
@@ -126,10 +124,11 @@ def migrate_table(src, cur, schema: str, table: str) -> int:
 
     return total
 
-
-def migrate_view(src, cur, schema: str, view: str, table_map: dict[str, str]) -> None:
-    src.execute("SELECT sql FROM sqlite_master WHERE type='view' AND name=?", (view,))
-    row = src.fetchone()
+def migrate_view(src_cur, dst_cur, schema: str, view: str, table_map: dict) -> None:
+    src_cur.execute(
+        "SELECT sql FROM sqlite_master WHERE type='view' AND name=?", (view,)
+    )
+    row = src_cur.fetchone()
     if not row or not row[0]:
         print(f"  ! view {view}: not found, skipping")
         return
@@ -157,10 +156,9 @@ def migrate_view(src, cur, schema: str, view: str, table_map: dict[str, str]) ->
         )
 
     target = qualified(schema, view)
-    run(cur, f"DROP VIEW IF EXISTS {target}", f"drop view {schema}.{view}")
-    run(cur, f"CREATE VIEW {target} AS\n{body}", f"create view {schema}.{view}")
+    run(dst_cur, f"DROP VIEW IF EXISTS {target}", f"drop view {schema}.{view}")
+    run(dst_cur, f"CREATE VIEW {target} AS\n{body}", f"create view {schema}.{view}")
     print(f"  ✓ view {schema}.{view}")
-
 
 # ---------------------------------------------------------------- main
 
@@ -169,11 +167,13 @@ def main() -> None:
         sys.exit(f"SQLite database not found: {SQLITE_PATH}")
 
     src = sqlite3.connect(SQLITE_PATH)
-    src.execute(
+    src_cur = src.cursor()
+
+    src_cur.execute(
         "SELECT name FROM sqlite_master "
         "WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
     )
-    all_tables = [r[0] for r in src.fetchall()]
+    all_tables = [r[0] for r in src_cur.fetchall()]
 
     v1_tables = [t for t in all_tables if not t.startswith("v2_")]
     v2_tables = [t for t in all_tables if t.startswith("v2_")]
@@ -192,9 +192,9 @@ def main() -> None:
         access_token=ACCESS_TOKEN,
     )
     try:
-        with conn.cursor() as cur:
+        with conn.cursor() as dst_cur:
             print("[schemas]")
-            create_schemas(cur)
+            create_schemas(dst_cur)
 
             for label, schema, tables in (
                 ("v1", V1_SCHEMA, v1_tables),
@@ -202,25 +202,24 @@ def main() -> None:
             ):
                 print(f"\n[{label}] -> {schema}")
                 for t in tables:
-                    n = migrate_table(src, cur, schema, t)
+                    n = migrate_table(src_cur, dst_cur, schema, t)
                     print(f"  ✓ {t:<34} {n:>8} rows")
 
             print("\n[views]")
-            migrate_view(src, cur, V2_SCHEMA, VIEW_NAME, table_map)
+            migrate_view(src_cur, dst_cur, V2_SCHEMA, VIEW_NAME, table_map)
 
             print("\n[verify]")
             for schema, tables in ((V1_SCHEMA, v1_tables), (V2_SCHEMA, v2_tables)):
                 for t in tables:
-                    cur.execute(f"SELECT COUNT(*) FROM {qualified(schema, t)}")
-                    print(f"  {schema}.{t:<32} {cur.fetchone()[0]:>8}")
-            cur.execute(f"SELECT COUNT(*) FROM {qualified(V2_SCHEMA, VIEW_NAME)}")
-            print(f"  {V2_SCHEMA}.{VIEW_NAME:<32} {cur.fetchone()[0]:>8}")
+                    dst_cur.execute(f"SELECT COUNT(*) FROM {qualified(schema, t)}")
+                    print(f"  {schema}.{t:<32} {dst_cur.fetchone()[0]:>8}")
+            dst_cur.execute(f"SELECT COUNT(*) FROM {qualified(V2_SCHEMA, VIEW_NAME)}")
+            print(f"  {V2_SCHEMA}.{VIEW_NAME:<32} {dst_cur.fetchone()[0]:>8}")
     finally:
         conn.close()
         src.close()
 
     print("\nDone.")
-
 
 if __name__ == "__main__":
     main()

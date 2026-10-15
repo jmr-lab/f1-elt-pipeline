@@ -112,6 +112,15 @@ jobs:
         run: |
           sqlite3 dist/formula1.db < dbt/migrations/transform-tables.sql
       
+      # --- ADDED: Upload the transformed database so downstream jobs can access it ---
+      - name: Upload transformed database
+        uses: actions/upload-artifact@v4
+        with:
+          name: f1-database-transformed
+          path: dist/formula1.db
+          retention-days: 7
+      # -------------------------------------------------------------------------
+      
       - name: Verify Both Table Sets Exist
         run: |
           echo "Old tables (for other project):"

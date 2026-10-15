@@ -650,6 +650,8 @@ sources:
       # ============================================================
       # KEEP OLD TABLES AVAILABLE FOR OTHER PROJECTS
       # (These remain in database but not referenced by this dbt project)
+      # NOTE: Removed duplicate definitions of base_team, points_system,
+      # championship_system which already exist above with same name.
       # ============================================================
       - name: season
         description: "F1 racing seasons with metadata"
@@ -758,75 +760,6 @@ sources:
             description: "Primary team color"
           - name: wikipedia
             description: "Wikipedia page URL"
-          - name: api_id
-            description: "Jolpiка API identifier"
-
-      - name: base_team
-        description: "Base/parent team groupings"
-        columns:
-          - name: id
-            description: "Primary key"
-            tests:
-              - unique
-              - not_null
-          - name: name
-            description: "Base team name"
-          - name: api_id
-            description: "Jolpiка API identifier"
-
-      - name: points_system
-        description: "Points allocation rules"
-        columns:
-          - name: id
-            description: "Primary key"
-            tests:
-              - unique
-              - not_null
-          - name: name
-            description: "Points system name"
-          - name: reference
-            description: "Reference code"
-          - name: partial
-            description: "Partial season flag"
-          - name: driver_position_points
-            description: "Driver position points"
-          - name: driver_fastest_lap
-            description: "Fastest lap bonus for drivers"
-          - name: team_position_points
-            description: "Team position points"
-          - name: team_fastest_lap
-            description: "Fastest lap bonus for teams"
-          - name: shared_drive
-            description: "Shared drive allowance"
-          - name: is_double_points
-            description: "Double points flag"
-          - name: api_id
-            description: "Jolpiка API identifier"
-
-      - name: championship_system
-        description: "Championship calculation rules"
-        columns:
-          - name: id
-            description: "Primary key"
-            tests:
-              - unique
-              - not_null
-          - name: name
-            description: "System name"
-          - name: reference
-            description: "Reference code"
-          - name: driver_best_results
-            description: "Best results count for drivers"
-          - name: team_best_results
-            description: "Best results count for teams"
-          - name: driver_season_split
-            description: "Driver season split"
-          - name: team_season_split
-            description: "Team season split"
-          - name: team_points_per_session
-            description: "Team points per session flag"
-          - name: eligibility
-            description: "Eligibility rules"
           - name: api_id
             description: "Jolpiка API identifier"
 

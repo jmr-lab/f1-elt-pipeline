@@ -1,6 +1,16 @@
 -- ============================================================
 -- F1 SCHEMA MIGRATION TO NEW MODEL (WITH PREFIX)
 -- Keeps OLD tables intact, creates NEW v2_ prefixed tables
+--
+-- FIXES APPLIED:
+--   1. driver: 'country' column doesn't exist → use 'nationality' mapped to birth_country
+--   2. v2_round.number: NULL fallback using ROW_NUMBER() per season
+--   3. v2_driver_championship.season_id: derive from year when NULL
+--   4. v2_constructor_championship.season_id: derive from year when NULL
+--   5. v2_lap.number: NULL fallback using ROW_NUMBER() per session_entry
+--   6. _countries_lookup: confirmed has 'id' column (no fix needed!)
+--   7. v2_driver_season.nationality: COALESCE to 'Unknown' when NULL
+--   8. v2_constructor_season.nationality: COALESCE to 'Unknown' when NULL
 -- ============================================================
 
 -- ============================================================
@@ -281,19 +291,29 @@ INSERT INTO v2_circuit (id, name, reference, locality, country, country_code,
 SELECT id, name, reference, locality, country, country_code,
        latitude, longitude, altitude, wikipedia FROM circuit;
 
--- Migrate Driver (no api_id, map country to birth_country)
+-- FIX 1: Driver — source table has 'nationality', not 'country'. Map to birth_country.
 INSERT INTO v2_driver (id, reference, abbreviation, forename, surname,
                        permanent_car_number, date_of_birth, birth_country, wikipedia)
 SELECT id, reference, abbreviation, forename, surname,
-       permanent_car_number, date_of_birth, country, wikipedia FROM driver;
+       permanent_car_number, date_of_birth, nationality, wikipedia FROM driver;
 
 -- Migrate Constructor (renamed from team, no api_id)
 INSERT INTO v2_constructor (id, name, reference, base_constructor_id, primary_color, wikipedia)
 SELECT id, name, reference, base_team_id, primary_color, wikipedia FROM team;
 
--- Migrate Round (no api_id)
+-- FIX 2: Round — NULL 'number' fallback using ROW_NUMBER() per season ordered by date.
 INSERT INTO v2_round (id, season_id, circuit_id, number, name, date, is_cancelled, wikipedia)
-SELECT id, season_id, circuit_id, number, name, date, is_cancelled, wikipedia FROM round;
+SELECT r.id, r.season_id, r.circuit_id,
+       CASE
+         WHEN r.number IS NOT NULL THEN r.number
+         ELSE (SELECT COALESCE(MAX(r2.number), 0) FROM round r2 WHERE r2.season_id = r.season_id)
+              + ROW_NUMBER() OVER (PARTITION BY r.season_id ORDER BY r.date, r.id)
+       END AS number,
+       COALESCE(r.name, 'Unknown round'),
+       r.date,
+       COALESCE(r.is_cancelled, 0),
+       r.wikipedia
+FROM round r;
 
 -- Migrate Constructor Driver (renamed from team_driver, no api_id)
 INSERT INTO v2_constructor_driver (id, season_id, constructor_id, driver_id, role)
@@ -317,27 +337,42 @@ SELECT id, session_id, round_entry_id, grid, position, points,
        laps_completed, fastest_lap_rank, time, detail, status,
        is_classified, is_eligible_for_points FROM session_entry;
 
--- Migrate Driver Championship (no api_id)
+-- FIX 3: Driver Championship — derive season_id from year when NULL.
 INSERT INTO v2_driver_championship (id, season_id, year, driver_id, round_id, position,
                                      points, win_count, highest_finish, is_eligible,
                                      adjustment_type, session_id, session_number, round_number)
-SELECT id, season_id, year, driver_id, round_id, position, points,
-       win_count, highest_finish, is_eligible, adjustment_type,
-       session_id, session_number, round_number FROM driver_championship;
+SELECT dc.id,
+       COALESCE(dc.season_id, (SELECT s.id FROM season s WHERE s.year = dc.year)),
+       dc.year, dc.driver_id, dc.round_id, dc.position, dc.points,
+       dc.win_count, dc.highest_finish, dc.is_eligible, dc.adjustment_type,
+       dc.session_id, dc.session_number, dc.round_number
+FROM driver_championship dc
+WHERE COALESCE(dc.season_id, (SELECT s.id FROM season s WHERE s.year = dc.year)) IS NOT NULL;
 
--- Migrate Constructor Championship (rename team_id → constructor_id, no api_id)
+-- FIX 4: Constructor Championship — same season_id derivation from year when NULL.
 INSERT INTO v2_constructor_championship (id, season_id, year, constructor_id, round_id, position,
                                           points, win_count, highest_finish, is_eligible,
                                           adjustment_type, session_id, session_number, round_number)
-SELECT id, season_id, year, team_id, round_id, position, points,
-       win_count, highest_finish, is_eligible, adjustment_type,
-       session_id, session_number, round_number FROM team_championship;
+SELECT tc.id,
+       COALESCE(tc.season_id, (SELECT s.id FROM season s WHERE s.year = tc.year)),
+       tc.year, tc.team_id, tc.round_id, tc.position, tc.points,
+       tc.win_count, tc.highest_finish, tc.is_eligible, tc.adjustment_type,
+       tc.session_id, tc.session_number, tc.round_number
+FROM team_championship tc
+WHERE COALESCE(tc.season_id, (SELECT s.id FROM season s WHERE s.year = tc.year)) IS NOT NULL;
 
--- Migrate Lap (no api_id)
+-- FIX 5: Lap — NULL 'number' fallback using ROW_NUMBER() per session_entry ordered by id.
 INSERT INTO v2_lap (id, session_entry_id, number, position, time, average_speed,
                     is_fastest_lap, is_deleted)
-SELECT id, session_entry_id, number, position, time, average_speed,
-       is_entry_fastest_lap, is_deleted FROM lap;
+SELECT l.id, l.session_entry_id,
+       CASE
+         WHEN l.number IS NOT NULL THEN l.number
+         ELSE (SELECT COALESCE(MAX(l2.number), 0) FROM lap l2 WHERE l2.session_entry_id = l.session_entry_id)
+              + ROW_NUMBER() OVER (PARTITION BY l.session_entry_id ORDER BY l.id)
+       END AS number,
+       l.position, l.time, l.average_speed,
+       l.is_entry_fastest_lap, l.is_deleted
+FROM lap l;
 
 -- Migrate Pit Stop (no api_id)
 INSERT INTO v2_pit_stop (id, session_entry_id, lap_id, number, duration, local_timestamp)
@@ -349,7 +384,7 @@ INSERT INTO v2_penalty (id, earned_session_entry_id, served_session_entry_id,
 SELECT id, earned_id, served_id, position, license_points,
        is_time_served_in_pit, time FROM penalty;
 
--- Migrate Countries Lookup
+-- Countries Lookup — source '_countries_lookup' DOES have 'id' column (verified from schema).
 INSERT INTO v2_countries (id, country_code, country, iso_alpha3, continent)
 SELECT id, country_code, country, iso_alpha3, continent FROM _countries_lookup;
 
@@ -357,16 +392,21 @@ SELECT id, country_code, country, iso_alpha3, continent FROM _countries_lookup;
 -- PART 9: CREATE YEAR-GRAIN ATTRIBUTE TABLES FROM EXISTING DATA
 -- ============================================================
 
--- Driver Nationality Per Season (from old team_driver + driver)
+-- FIX 7: Driver Nationality Per Season — COALESCE NULL nationality to 'Unknown'.
 INSERT INTO v2_driver_season (driver_id, season_id, nationality, country_code)
-SELECT td.driver_id, td.season_id, d.nationality, d.country_code
+SELECT td.driver_id, td.season_id,
+       COALESCE(d.nationality, 'Unknown') AS nationality,
+       d.country_code
 FROM team_driver td
 JOIN driver d ON td.driver_id = d.id
 GROUP BY td.driver_id, td.season_id;
 
--- Constructor Season (from old team_driver + team)
+-- FIX 8: Constructor Season — COALESCE NULL nationality and name to 'Unknown'.
 INSERT INTO v2_constructor_season (constructor_id, season_id, name, nationality, country_code, base_constructor_id)
-SELECT td.team_id, td.season_id, t.name, t.nationality, t.country_code, t.base_team_id
+SELECT td.team_id, td.season_id,
+       COALESCE(t.name, 'Unknown') AS name,
+       COALESCE(t.nationality, 'Unknown') AS nationality,
+       t.country_code, t.base_team_id
 FROM team_driver td
 JOIN team t ON td.team_id = t.id
 GROUP BY td.team_id, td.season_id;

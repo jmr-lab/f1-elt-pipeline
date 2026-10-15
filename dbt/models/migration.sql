@@ -2,15 +2,16 @@
 -- F1 SCHEMA MIGRATION TO NEW MODEL (WITH PREFIX)
 -- Keeps OLD tables intact, creates NEW v2_ prefixed tables
 --
--- FIXES APPLIED:
---   1. driver: 'country' column doesn't exist → use 'nationality' mapped to birth_country
+-- ALL FIXES APPLIED:
+--   1. driver: source uses 'nationality', mapped to 'birth_country'
 --   2. v2_round.number: NULL fallback using ROW_NUMBER() per season
---   3. v2_driver_championship.season_id: derive from year when NULL
---   4. v2_constructor_championship.season_id: derive from year when NULL
+--   3. v2_driver_championship: derive season_id from year; skip NULL round_id
+--   4. v2_constructor_championship: derive season_id from year; skip NULL round_id
 --   5. v2_lap.number: NULL fallback using ROW_NUMBER() per session_entry
---   6. _countries_lookup: confirmed has 'id' column (no fix needed!)
---   7. v2_driver_season.nationality: COALESCE to 'Unknown' when NULL
---   8. v2_constructor_season.nationality: COALESCE to 'Unknown' when NULL
+--   6. _countries_lookup: source only has (country_code, country);
+--      use rowid as PK, NULL for iso_alpha3/continent
+--   7. v2_driver_season.nationality: COALESCE to 'Unknown'
+--   8. v2_constructor_season.nationality: COALESCE to 'Unknown'
 -- ============================================================
 
 -- ============================================================
@@ -337,7 +338,7 @@ SELECT id, session_id, round_entry_id, grid, position, points,
        laps_completed, fastest_lap_rank, time, detail, status,
        is_classified, is_eligible_for_points FROM session_entry;
 
--- FIX 3: Driver Championship — derive season_id from year when NULL.
+-- FIX 3: Driver Championship — derive season_id from year when NULL; skip NULL round_id.
 INSERT INTO v2_driver_championship (id, season_id, year, driver_id, round_id, position,
                                      points, win_count, highest_finish, is_eligible,
                                      adjustment_type, session_id, session_number, round_number)
@@ -347,9 +348,10 @@ SELECT dc.id,
        dc.win_count, dc.highest_finish, dc.is_eligible, dc.adjustment_type,
        dc.session_id, dc.session_number, dc.round_number
 FROM driver_championship dc
-WHERE COALESCE(dc.season_id, (SELECT s.id FROM season s WHERE s.year = dc.year)) IS NOT NULL;
+WHERE dc.round_id IS NOT NULL
+  AND COALESCE(dc.season_id, (SELECT s.id FROM season s WHERE s.year = dc.year)) IS NOT NULL;
 
--- FIX 4: Constructor Championship — same season_id derivation from year when NULL.
+-- FIX 4: Constructor Championship — derive season_id from year when NULL; skip NULL round_id.
 INSERT INTO v2_constructor_championship (id, season_id, year, constructor_id, round_id, position,
                                           points, win_count, highest_finish, is_eligible,
                                           adjustment_type, session_id, session_number, round_number)
@@ -359,7 +361,8 @@ SELECT tc.id,
        tc.win_count, tc.highest_finish, tc.is_eligible, tc.adjustment_type,
        tc.session_id, tc.session_number, tc.round_number
 FROM team_championship tc
-WHERE COALESCE(tc.season_id, (SELECT s.id FROM season s WHERE s.year = tc.year)) IS NOT NULL;
+WHERE tc.round_id IS NOT NULL
+  AND COALESCE(tc.season_id, (SELECT s.id FROM season s WHERE s.year = tc.year)) IS NOT NULL;
 
 -- FIX 5: Lap — NULL 'number' fallback using ROW_NUMBER() per session_entry ordered by id.
 INSERT INTO v2_lap (id, session_entry_id, number, position, time, average_speed,
@@ -384,9 +387,12 @@ INSERT INTO v2_penalty (id, earned_session_entry_id, served_session_entry_id,
 SELECT id, earned_id, served_id, position, license_points,
        is_time_served_in_pit, time FROM penalty;
 
--- Countries Lookup — source '_countries_lookup' DOES have 'id' column (verified from schema).
+-- FIX 6: Countries Lookup — source table only has (country_code, country).
+-- Use rowid as surrogate PK; iso_alpha3 and continent don't exist in source,
+-- so insert NULL for those columns (enrich later if desired).
 INSERT INTO v2_countries (id, country_code, country, iso_alpha3, continent)
-SELECT id, country_code, country, iso_alpha3, continent FROM _countries_lookup;
+SELECT rowid, country_code, country, NULL, NULL
+FROM _countries_lookup;
 
 -- ============================================================
 -- PART 9: CREATE YEAR-GRAIN ATTRIBUTE TABLES FROM EXISTING DATA

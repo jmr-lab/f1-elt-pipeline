@@ -442,15 +442,19 @@ INSERT INTO v2_engine (id, name, reference, nationality, founded_year, wikipedia
 (18, 'Ford', 'ford', 'American', 1962, 'https://en.wikipedia.org/wiki/Cosworth_DFV');
 
 -- Sample constructor-engine relationships (extend as needed)
-INSERT INTO v2_constructor_engine (constructor_id, season_id, engine_id, engine_ref_override)
-SELECT c.id, s.id, e.id, NULL
-FROM (VALUES
-    ('ferrari',  'ferrari', 2005, 2025),
-    ('mercedes', 'mercedes', 2010, 2025)
-) AS mapping(constructor_ref, engine_ref, first_year, last_year)
-JOIN v2_constructor c ON c.reference = mapping.constructor_ref
-JOIN v2_engine      e ON e.reference = mapping.engine_ref
-JOIN v2_season      s ON s.year BETWEEN mapping.first_year AND mapping.last_year;
+INSERT INTO v2_constructor_engine (constructor_id, season_id, engine_id, engine_ref_override) VALUES
+-- Ferrari (self-supplied)
+(1, 2005, 1, NULL), (1, 2006, 1, NULL), (1, 2007, 1, NULL), (1, 2008, 1, NULL),
+(1, 2009, 1, NULL), (1, 2010, 1, NULL), (1, 2011, 1, NULL), (1, 2012, 1, NULL),
+(1, 2013, 1, NULL), (1, 2014, 1, NULL), (1, 2015, 1, NULL), (1, 2016, 1, NULL),
+(1, 2017, 1, NULL), (1, 2018, 1, NULL), (1, 2019, 1, NULL), (1, 2020, 1, NULL),
+(1, 2021, 1, NULL), (1, 2022, 1, NULL), (1, 2023, 1, NULL), (1, 2024, 1, NULL),
+(1, 2025, 1, NULL),
+-- Mercedes
+(2, 2010, 2, NULL), (2, 2011, 2, NULL), (2, 2012, 2, NULL), (2, 2013, 2, NULL),
+(2, 2014, 2, NULL), (2, 2015, 2, NULL), (2, 2016, 2, NULL), (2, 2017, 2, NULL),
+(2, 2018, 2, NULL), (2, 2019, 2, NULL), (2, 2020, 2, NULL), (2, 2021, 2, NULL),
+(2, 2022, 2, NULL), (2, 2023, 2, NULL), (2, 2024, 2, NULL), (2, 2025, 2, NULL);
 
 -- ============================================================
 -- PART 11: CREATE INDEXES

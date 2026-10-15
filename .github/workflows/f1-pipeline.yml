@@ -79,7 +79,7 @@ jobs:
 
       - name: Run Migration SQL
         run: |
-          sqlite3 dist/formula1.db < src/migration.sql
+          sqlite3 dist/formula1.db < dbt/models/migration.sql
 
       - name: Verify Both Table Sets Exist
         run: |

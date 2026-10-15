@@ -76,7 +76,19 @@ jobs:
           name: f1-database
           path: dist/formula1.db
           retention-days: 7
-      
+
+      - name: Run Migration SQL
+        run: |
+          sqlite3 dist/formula1.db < src/migration.sql
+
+      - name: Verify Both Table Sets Exist
+        run: |
+          echo "Old tables (for other project):"
+          sqlite3 dist/formula1.db "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'v2_%' ORDER BY name;"
+          echo ""
+          echo "New v2_ tables (for dbt):"
+          sqlite3 dist/formula1.db "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'v2_%' ORDER BY name;"      
+
       - name: Verify outputs
         run: |
           echo "=== DB folder contents ==="
@@ -141,15 +153,19 @@ jobs:
         working-directory: dbt
         run: dbt test
       
-      - name: Verify views created
+      - name: Verify both table sets exist
         run: |
-          echo "=== Tables in database ==="
-          sqlite3 dist/formula1.db ".tables"
-          
+          echo "=== Original tables (preserved for analysis) ==="
+          sqlite3 dist/formula1.db "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'v2_%' ORDER BY name;"
+    
+          echo ""
+          echo "=== New v2_ tables (for dbt) ==="
+          sqlite3 dist/formula1.db "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'v2_%' ORDER BY name;"
+    
           echo ""
           echo "=== f1summary view sample ==="
           sqlite3 dist/formula1.db "SELECT COUNT(*) as total FROM f1summary;"
-      
+
       - name: Upload dbt docs artifact
         uses: actions/upload-artifact@v4
         with:

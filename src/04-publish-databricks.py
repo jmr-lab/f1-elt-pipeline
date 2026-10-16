@@ -55,6 +55,37 @@ def spark_type(sqlite_type: str) -> str:
         return "DOUBLE"
     return "STRING"
 
+def effective_types(src_cur, table: str, columns: list[tuple[str, str]]) -> list[str]:
+    """
+    Derive Spark types from declared type, widened by actual storage class.
+    
+    SQLite allows INTEGER-declared columns to store text. If we find text
+    in a numeric column, widen to STRING to prevent CAST errors in Databricks.
+    """
+    types = []
+    for name, decl in columns:
+        st = spark_type(decl)
+        if st in ("BIGINT", "DOUBLE"):
+            # Check actual storage classes used in this column
+            src_cur.execute(
+                f"SELECT DISTINCT typeof({sq_ident(name)}) FROM {sq_ident(table)} "
+                f"WHERE {sq_ident(name)} IS NOT NULL"
+            )
+            seen = {r[0] for r in src_cur.fetchall()}
+            
+            # Widen if we find text/blob where we expected integer/float
+            if "text" in seen or "blob" in seen:
+                st = "STRING"
+            elif st == "BIGINT" and "real" in seen:
+                st = "DOUBLE"
+            
+            if st != spark_type(decl):
+                print(f"  ! {table}.{name}: stored as {sorted(seen)} "
+                      f"(declared {decl}) -> widening to {st}")
+        
+        types.append(st)
+    return types
+
 def literal(value) -> str:
     """Render a Python value as a SQL literal."""
     if value is None:
@@ -94,11 +125,14 @@ def migrate_table(src_cur, dst_cur, schema: str, table: str) -> int:
     columns = [(r[1], r[2]) for r in info]
     col_names = [c[0] for c in columns]
 
+    # Determine effective types (may differ from declared due to SQLite's loose typing)
+    col_types = effective_types(src_cur, table, columns)
+
     # Full refresh
     target = qualified(schema, table)
     run(dst_cur, f"DROP TABLE IF EXISTS {target}", f"drop {schema}.{table}")
 
-    ddl_cols = ",\n  ".join(f"{ident(n)} {spark_type(t)}" for n, t in columns)
+    ddl_cols = ",\n  ".join(f"{ident(n)} {t}" for n, t in zip(col_names, col_types))
     run(dst_cur, f"CREATE TABLE {target} (\n  {ddl_cols}\n) USING DELTA",
         f"create {schema}.{table}")
 

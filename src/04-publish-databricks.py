@@ -33,24 +33,30 @@ from databricks import sql as dbsql
 
 # ---------------------------------------------------------------- config
 
-SQLITE_PATH = os.environ.get("SQLITE_PATH", "dist/formula1.db")
+def env(name: str, default: str = "") -> str:
+    """Read an env var, treating unset *and* empty/whitespace as absent."""
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip() or default
+
+SQLITE_PATH = env("SQLITE_PATH", "dist/formula1.db")
 SERVER_HOSTNAME = os.environ["DATABRICKS_SERVER_HOSTNAME"]
 HTTP_PATH = os.environ["DATABRICKS_HTTP_PATH"]
 ACCESS_TOKEN = os.environ["DATABRICKS_TOKEN"]
-CATALOG = os.environ.get("DATABRICKS_CATALOG", "").strip()
+CATALOG = env("DATABRICKS_CATALOG")
 
-V1_SCHEMA = os.environ.get("JOLPICA_SCHEMA", "jolpica")
-V2_SCHEMA = os.environ.get("JMRLAB_SCHEMA", "jmr_lab")
+V1_SCHEMA = env("JOLPICA_SCHEMA", "jolpica")
+V2_SCHEMA = env("JMRLAB_SCHEMA", "jmr_lab")
 
 # Staging volume: must live in a Unity Catalog catalog.
-STAGE_SCHEMA = os.environ.get("DATABRICKS_STAGE_SCHEMA", V2_SCHEMA)
-STAGE_VOLUME = os.environ.get("DATABRICKS_STAGE_VOLUME", "f1_staging")
-STAGE_PREFIX = os.environ.get("DATABRICKS_STAGE_PREFIX", "f1-publish")
+STAGE_SCHEMA = env("DATABRICKS_STAGE_SCHEMA", V2_SCHEMA)
+STAGE_VOLUME = env("DATABRICKS_STAGE_VOLUME", "f1_staging")
 
 VIEW_NAME = "f1summary"
 
 # Rows pulled from SQLite per Parquet file. Bounds memory on large tables.
-READ_CHUNK_ROWS = int(os.environ.get("READ_CHUNK_ROWS", "200000"))
+READ_CHUNK_ROWS = int(env("READ_CHUNK_ROWS", "200000"))
 
 # ---------------------------------------------------------------- helpers
 
@@ -195,18 +201,19 @@ def create_schemas(cur) -> None:
 
 def create_volume(cur) -> str:
     """Create the staging volume if needed; return its /Volumes path."""
-    if not CATALOG:
+    if not CATALOG or not STAGE_SCHEMA:
         sys.exit(
-            "DATABRICKS_CATALOG must be set: staging volumes require a "
-            "three-level Unity Catalog namespace."
+            "DATABRICKS_CATALOG and the staging schema must both be non-empty: "
+            "staging volumes require a three-level Unity Catalog namespace."
         )
     name = f"{ident(CATALOG)}.{ident(STAGE_SCHEMA)}.{ident(STAGE_VOLUME)}"
     run(cur, f"CREATE VOLUME IF NOT EXISTS {name}", f"create volume {STAGE_VOLUME}")
     print(f"  ok volume {CATALOG}.{STAGE_SCHEMA}.{STAGE_VOLUME}")
     return f"/Volumes/{CATALOG}/{STAGE_SCHEMA}/{STAGE_VOLUME}"
 
-def migrate_table(src_cur, dst_cur, schema: str, table: str, volume_root: str,
-                  run_dir: str, local_root: Path) -> tuple[int, int, list[str]]:
+def migrate_table(src_conn, src_cur, dst_cur, schema: str, table: str,
+                  volume_root: str, run_dir: str,
+                  local_root: Path) -> tuple[int, int, list[str]]:
     """
     Export -> upload -> DROP/CREATE/COPY INTO one table.
 
@@ -226,7 +233,7 @@ def migrate_table(src_cur, dst_cur, schema: str, table: str, volume_root: str,
 
     # --- 1. export locally
     local_dir = local_root / schema / table
-    files = export_table(src_cur, table, plan, local_dir)
+    files = export_table(src_conn, table, plan, local_dir)
 
     # --- 2. upload to the volume
     remote_dir = f"{volume_root}/{run_dir}/{schema}/{table}"
@@ -346,7 +353,7 @@ def main() -> None:
                 print(f"\n[{label}] -> {schema}")
                 for t in tables:
                     expected, loaded, paths = migrate_table(
-                        src_cur, dst_cur, schema, t, volume_root, run_dir, local_root
+                        src, src_cur, dst_cur, schema, t, volume_root, run_dir, local_root
                     )
                     uploaded_paths.extend(paths)
                     total_rows += loaded

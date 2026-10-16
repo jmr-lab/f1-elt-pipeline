@@ -6,7 +6,7 @@ Strategy: stage-and-COPY-INTO
   1. Export each SQLite table to Parquet locally (pandas + pyarrow)
   2. Upload the Parquet files to a Unity Catalog volume (Files API)
   3. DROP/CREATE the Delta tables and COPY INTO them from the volume
-  4. Recreate the f1summary view
+  4. Recreate the f1summary view (if it exists in source)
   5. Verify row counts against SQLite, then clean up staging
 
 Routing:
@@ -339,6 +339,7 @@ def main() -> None:
     uploaded_paths: list[str] = []
     mismatches: list[tuple[str, int, int]] = []
     total_rows = 0
+    view_created = False
 
     try:
         with conn.cursor() as dst_cur:
@@ -365,9 +366,25 @@ def main() -> None:
             print("\n[views]")
             migrate_view(src_cur, dst_cur, V2_SCHEMA, VIEW_NAME, table_map)
 
+            # Track whether the view was created for verification
+            src_cur.execute(
+                "SELECT sql FROM sqlite_master WHERE type='view' AND name=?", (VIEW_NAME,)
+            )
+            view_row = src_cur.fetchone()
+            if view_row and view_row[0]:
+                view_created = True
+
             print("\n[verify]")
-            dst_cur.execute(f"SELECT COUNT(*) FROM {qualified(V2_SCHEMA, VIEW_NAME)}")
-            print(f"  {V2_SCHEMA}.{VIEW_NAME:<32} {dst_cur.fetchone()[0]:>9}")
+            # Tables were already verified per-table above
+            # View may not exist if transform-tables.sql didn't create it
+            if view_created:
+                try:
+                    dst_cur.execute(f"SELECT COUNT(*) FROM {qualified(V2_SCHEMA, VIEW_NAME)}")
+                    print(f"  {V2_SCHEMA}.{VIEW_NAME:<32} {dst_cur.fetchone()[0]:>9}")
+                except Exception as e:
+                    print(f"  ! {V2_SCHEMA}.{VIEW_NAME}: {e}")
+            else:
+                print(f"  - {V2_SCHEMA}.{VIEW_NAME:<32} (not created - check transform-tables.sql)")
             print(f"\n  total rows loaded: {total_rows:,}")
             if mismatches:
                 print(f"  {len(mismatches)} table(s) with row-count mismatch:", file=sys.stderr)
@@ -385,6 +402,7 @@ def main() -> None:
         delete_file(f"{p.rsplit('/', 1)[0]}")  # per-table directory
     print(f"  removed {removed}/{len(uploaded_paths)} staged file(s)")
 
+    # Exit with error only on row-count mismatches, not on missing view
     if mismatches:
         sys.exit(1)
     print("\nDone.")

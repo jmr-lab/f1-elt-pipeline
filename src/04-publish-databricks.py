@@ -54,6 +54,7 @@ STAGE_SCHEMA = env("DATABRICKS_STAGE_SCHEMA", V2_SCHEMA)
 STAGE_VOLUME = env("DATABRICKS_STAGE_VOLUME", "f1_staging")
 
 VIEW_NAME = "f1summary"
+VIEW_SQL_PATH = env("VIEW_SQL_PATH", "src/views/f1summary.spark.sql")
 
 # Rows pulled from SQLite per Parquet file. Bounds memory on large tables.
 READ_CHUNK_ROWS = int(env("READ_CHUNK_ROWS", "200000"))
@@ -279,29 +280,23 @@ def to_spark_identifiers(sql: str) -> str:
         sql,
     )
 
-def migrate_view(src_cur, dst_cur, schema: str, view: str, table_map: dict) -> None:
-    src_cur.execute(
-        "SELECT sql FROM sqlite_master WHERE type='view' AND name=?", (view,)
-    )
-    row = src_cur.fetchone()
-    if not row or not row[0]:
-        print(f"  ! view {view}: not found, skipping")
-        return
+def migrate_view(dst_cur, schema: str, view: str, table_map: dict) -> bool:
+    """
+    Create the view in Databricks from a Spark-native definition.
 
-    ddl = row[0]
-    match = re.match(
-        r'^\s*CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+[`"\[]?\w+[`"\]]?\s+AS\s+',
-        ddl,
-        flags=re.IGNORECASE | re.DOTALL,
-    )
-    if not match:
-        print(f"  ! view {view}: could not parse definition, skipping")
-        return
-    body = ddl[match.end():]
+    Deliberately NOT translated from the SQLite DDL: that view uses
+    SQLite-only functions (GLOB, strftime) with no Spark equivalent, so a
+    Spark-dialect definition is maintained alongside it.
+    """
+    path = Path(VIEW_SQL_PATH)
+    if not path.exists():
+        print(f"  ! view {view}: {path} not found, skipping")
+        return False
 
-    # Rewrite table references ONLY where they follow FROM or JOIN.
-    # Anchoring to those keywords stops column aliases that happen to share a
-    # table's name (e.g. `AS round`) from being rewritten into table refs.
+    body = path.read_text(encoding="utf-8").strip().rstrip(";")
+
+    # Qualify table references ONLY where they follow FROM or JOIN, so column
+    # aliases sharing a table's name (e.g. `AS round`) are left untouched.
     # Longest names first so `v2_session_entry` is tried before `session_entry`.
     for tbl, dest_schema in sorted(table_map.items(), key=lambda kv: -len(kv[0])):
         body = re.sub(
@@ -310,13 +305,11 @@ def migrate_view(src_cur, dst_cur, schema: str, view: str, table_map: dict) -> N
             body,
         )
 
-    # SQLite double-quoted identifiers -> Spark backticks.
-    body = to_spark_identifiers(body)
-
     target = qualified(schema, view)
     run(dst_cur, f"DROP VIEW IF EXISTS {target}", f"drop view {schema}.{view}")
     run(dst_cur, f"CREATE VIEW {target} AS\n{body}", f"create view {schema}.{view}")
     print(f"  ok view {schema}.{view}")
+    return True
 
 # ---------------------------------------------------------------- main
 
@@ -382,32 +375,14 @@ def main() -> None:
                     print(f"  ok {t:<34} {loaded:>9} rows{note}")
 
             print("\n[views]")
-            migrate_view(src_cur, dst_cur, V2_SCHEMA, VIEW_NAME, table_map)
-
-            # Track whether the view was created for verification
-            src_cur.execute(
-                "SELECT sql FROM sqlite_master WHERE type='view' AND name=?", (VIEW_NAME,)
-            )
-            view_row = src_cur.fetchone()
-            if view_row and view_row[0]:
-                view_created = True
+            view_created = migrate_view(dst_cur, V2_SCHEMA, VIEW_NAME, table_map)
 
             print("\n[verify]")
-            # Tables were already verified per-table above
-            # View may not exist if transform-tables.sql didn't create it
             if view_created:
-                try:
-                    dst_cur.execute(f"SELECT COUNT(*) FROM {qualified(V2_SCHEMA, VIEW_NAME)}")
-                    print(f"  {V2_SCHEMA}.{VIEW_NAME:<32} {dst_cur.fetchone()[0]:>9}")
-                except Exception as e:
-                    print(f"  ! {V2_SCHEMA}.{VIEW_NAME}: {e}")
+                dst_cur.execute(f"SELECT COUNT(*) FROM {qualified(V2_SCHEMA, VIEW_NAME)}")
+                print(f"  {V2_SCHEMA}.{VIEW_NAME:<32} {dst_cur.fetchone()[0]:>9}")
             else:
-                print(f"  - {V2_SCHEMA}.{VIEW_NAME:<32} (not created - check transform-tables.sql)")
-            print(f"\n  total rows loaded: {total_rows:,}")
-            if mismatches:
-                print(f"  {len(mismatches)} table(s) with row-count mismatch:", file=sys.stderr)
-                for name, exp, got in mismatches:
-                    print(f"    {name}: sqlite={exp:,} databricks={got:,}", file=sys.stderr)
+                print(f"  - {V2_SCHEMA}.{VIEW_NAME:<32} (not created)")
     finally:
         conn.close()
         src.close()

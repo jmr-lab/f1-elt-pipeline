@@ -269,20 +269,24 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Install Databricks SQL connector
-        run: pip install "databricks-sql-connector>=3.0"
-
       - name: Download transformed database
         uses: actions/download-artifact@v4
         with:
           name: f1-database-transformed
           path: dist/
 
+      - name: Install dependencies
+        run: pip install "databricks-sql-connector>=3.0" pandas pyarrow requests
+
       - name: Publish to Databricks
+        timeout-minutes: 30
         env:
           SQLITE_PATH: dist/formula1.db
           DATABRICKS_SERVER_HOSTNAME: ${{ secrets.DATABRICKS_SERVER_HOSTNAME }}
           DATABRICKS_HTTP_PATH: ${{ secrets.DATABRICKS_HTTP_PATH }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
           DATABRICKS_CATALOG: ${{ vars.DATABRICKS_CATALOG }}
+          DATABRICKS_STAGE_VOLUME: f1_staging
+          DATABRICKS_STAGE_SCHEMA: ${{ vars.JMRLAB_SCHEMA }}
         run: python src/04-publish-databricks.py
+        

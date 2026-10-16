@@ -2,34 +2,55 @@
 """
 Publish the transformed F1 SQLite database to Databricks.
 
+Strategy: stage-and-COPY-INTO
+  1. Export each SQLite table to Parquet locally (pandas + pyarrow)
+  2. Upload the Parquet files to a Unity Catalog volume (Files API)
+  3. DROP/CREATE the Delta tables and COPY INTO them from the volume
+  4. Recreate the f1summary view
+  5. Verify row counts against SQLite, then clean up staging
+
 Routing:
   jolpica  <- v1 tables (anything not prefixed v2_)
   jmr_lab  <- v2_ tables, plus the f1summary view
 
-Requires: pip install databricks-sql-connector
+Requires: pip install "databricks-sql-connector>=3.0" pandas pyarrow requests
 """
 
 from __future__ import annotations
 
-import math
 import os
 import re
+import shutil
 import sqlite3
 import sys
+import tempfile
+from datetime import datetime, timezone
+from pathlib import Path
 
+import pandas as pd
+import requests
 from databricks import sql as dbsql
 
+# ---------------------------------------------------------------- config
+
 SQLITE_PATH = os.environ.get("SQLITE_PATH", "dist/formula1.db")
-SERVER_HOSTNAME = os.environ["DATABRICKS_SERVER_HOSTNAME"]   # dbc-xxxx.cloud.databricks.com
-HTTP_PATH = os.environ["DATABRICKS_HTTP_PATH"]               # /sql/1.0/warehouses/<id>
+SERVER_HOSTNAME = os.environ["DATABRICKS_SERVER_HOSTNAME"]
+HTTP_PATH = os.environ["DATABRICKS_HTTP_PATH"]
 ACCESS_TOKEN = os.environ["DATABRICKS_TOKEN"]
-CATALOG = os.environ.get("DATABRICKS_CATALOG", "").strip()   # optional; blank => 2-part names
+CATALOG = os.environ.get("DATABRICKS_CATALOG", "").strip()
 
 V1_SCHEMA = os.environ.get("JOLPICA_SCHEMA", "jolpica")
 V2_SCHEMA = os.environ.get("JMRLAB_SCHEMA", "jmr_lab")
 
+# Staging volume: must live in a Unity Catalog catalog.
+STAGE_SCHEMA = os.environ.get("DATABRICKS_STAGE_SCHEMA", V2_SCHEMA)
+STAGE_VOLUME = os.environ.get("DATABRICKS_STAGE_VOLUME", "f1_staging")
+STAGE_PREFIX = os.environ.get("DATABRICKS_STAGE_PREFIX", "f1-publish")
+
 VIEW_NAME = "f1summary"
-ROWS_PER_STATEMENT = 500
+
+# Rows pulled from SQLite per Parquet file. Bounds memory on large tables.
+READ_CHUNK_ROWS = int(os.environ.get("READ_CHUNK_ROWS", "200000"))
 
 # ---------------------------------------------------------------- helpers
 
@@ -40,6 +61,12 @@ def ident(name: str) -> str:
 def sq_ident(name: str) -> str:
     """Double-quote an identifier for SQLite."""
     return '"' + name.replace('"', '""') + '"'
+
+def sql_str(value: str) -> str:
+    """Render a Python string as a SQL string literal."""
+    if "'" in value:
+        raise ValueError(f"unexpected quote in path: {value!r}")
+    return "'" + value + "'"
 
 def qualified(schema: str, table: str) -> str:
     if CATALOG:
@@ -55,108 +82,182 @@ def spark_type(sqlite_type: str) -> str:
         return "DOUBLE"
     return "STRING"
 
-def effective_types(src_cur, table: str, columns: list[tuple[str, str]]) -> list[str]:
-    """
-    Derive Spark types from declared type, widened by actual storage class.
-    
-    SQLite allows INTEGER-declared columns to store text. If we find text
-    in a numeric column, widen to STRING to prevent CAST errors in Databricks.
-    """
-    types = []
-    for name, decl in columns:
-        st = spark_type(decl)
-        if st in ("BIGINT", "DOUBLE"):
-            # Check actual storage classes used in this column
-            src_cur.execute(
-                f"SELECT DISTINCT typeof({sq_ident(name)}) FROM {sq_ident(table)} "
-                f"WHERE {sq_ident(name)} IS NOT NULL"
-            )
-            seen = {r[0] for r in src_cur.fetchall()}
-            
-            # Widen if we find text/blob where we expected integer/float
-            if "text" in seen or "blob" in seen:
-                st = "STRING"
-            elif st == "BIGINT" and "real" in seen:
-                st = "DOUBLE"
-            
-            if st != spark_type(decl):
-                print(f"  ! {table}.{name}: stored as {sorted(seen)} "
-                      f"(declared {decl}) -> widening to {st}")
-        
-        types.append(st)
-    return types
-
-def literal(value) -> str:
-    """Render a Python value as a SQL literal."""
-    if value is None:
-        return "NULL"
-    if isinstance(value, bool):
-        return "TRUE" if value else "FALSE"
-    if isinstance(value, int):
-        return str(value)
-    if isinstance(value, float):
-        if math.isnan(value) or math.isinf(value):
-            return "NULL"
-        return repr(value)
-    return "'" + str(value).replace("'", "''") + "'"
-
 def run(cur, sql: str, label: str = "") -> None:
     try:
         cur.execute(sql)
     except Exception as exc:
-        print(f"  ✗ {label or sql[:80]}\n    {exc}", file=sys.stderr)
+        print(f"  x {label or sql[:80]}\n    {exc}", file=sys.stderr)
         raise
 
-# ---------------------------------------------------------------- migration
+# ---------------------------------------------------------------- type planning
+
+def plan_table_types(src_cur, table: str, columns: list[tuple[str, str]]) -> list[tuple[str, str]]:
+    """
+    Decide the Spark type for every column.
+
+    SQLite does not enforce declared types: an INTEGER column can hold text.
+    We inspect the actual storage classes (typeof) and widen when needed, so
+    the Parquet schema, the Delta DDL and the data all agree.
+    """
+    plan: list[tuple[str, str]] = []
+    for name, decl in columns:
+        st = spark_type(decl)
+        src_cur.execute(
+            f"SELECT DISTINCT typeof({sq_ident(name)}) FROM {sq_ident(table)} "
+            f"WHERE {sq_ident(name)} IS NOT NULL"
+        )
+        seen = {r[0] for r in src_cur.fetchall()}
+
+        if "text" in seen or "blob" in seen:
+            st = "STRING"
+        elif st == "BIGINT" and "real" in seen:
+            st = "DOUBLE"
+
+        if st != spark_type(decl):
+            print(f"    ! {table}.{name}: stored as {sorted(seen)} "
+                  f"(declared {decl}) -> widening to {st}")
+        plan.append((name, st))
+    return plan
+
+def coerce_frame(df: pd.DataFrame, plan: list[tuple[str, str]]) -> pd.DataFrame:
+    """
+    Force every column to the planned type.
+
+    Applied identically to every chunk so all Parquet files for a table share
+    one schema -- otherwise COPY INTO would reject mismatched files.
+    Nullable dtypes are used so NULLs survive and map to real Parquet types.
+    """
+    out = {}
+    for name, st in plan:
+        col = df[name]
+        if st == "BIGINT":
+            out[name] = pd.to_numeric(col, errors="coerce").astype("Int64")
+        elif st == "DOUBLE":
+            out[name] = pd.to_numeric(col, errors="coerce").astype("Float64")
+        elif st == "BOOLEAN":
+            out[name] = col.astype("boolean")
+        else:
+            out[name] = col.astype("string")
+    return pd.DataFrame(out, columns=[n for n, _ in plan])
+
+# ---------------------------------------------------------------- staging
+
+def export_table(src_conn, table: str, plan, out_dir: Path) -> list[Path]:
+    """Write a table to one or more Parquet files. Returns the file paths."""
+    out_dir.mkdir(parents=True, exist_ok=True)
+    cols = ", ".join(sq_ident(n) for n, _ in plan)
+    reader = pd.read_sql_query(
+        f"SELECT {cols} FROM {sq_ident(table)}", src_conn, chunksize=READ_CHUNK_ROWS
+    )
+
+    files: list[Path] = []
+    for i, chunk in enumerate(reader):
+        path = out_dir / f"part-{i:05d}.parquet"
+        coerce_frame(chunk, plan).to_parquet(path, index=False, engine="pyarrow")
+        files.append(path)
+    return files
+
+def upload_file(uc_path: str, local_path: Path) -> None:
+    """Upload one file to a Unity Catalog volume via the Files API."""
+    url = f"https://{SERVER_HOSTNAME}/api/2.0/fs/files{uc_path}"
+    headers = {
+        "Authorization": f"Bearer {ACCESS_TOKEN}",
+        "Content-Type": "application/octet-stream",
+    }
+    # Send bytes rather than a file object: avoids chunked transfer-encoding,
+    # which the Files API endpoint does not reliably accept.
+    with open(local_path, "rb") as fh:
+        payload = fh.read()
+    resp = requests.put(url, headers=headers, data=payload, timeout=600)
+    if resp.status_code >= 300:
+        raise RuntimeError(
+            f"upload failed ({resp.status_code}) for {uc_path}: {resp.text[:300]}"
+        )
+
+def delete_file(uc_path: str) -> bool:
+    """Best-effort delete of a single file from a volume."""
+    url = f"https://{SERVER_HOSTNAME}/api/2.0/fs/files{uc_path}"
+    try:
+        resp = requests.delete(
+            url, headers={"Authorization": f"Bearer {ACCESS_TOKEN}"}, timeout=120
+        )
+        return resp.status_code < 300
+    except requests.RequestException:
+        return False
+
+# ---------------------------------------------------------------- databricks
 
 def create_schemas(cur) -> None:
     for schema in (V1_SCHEMA, V2_SCHEMA):
         target = f"{ident(CATALOG)}.{ident(schema)}" if CATALOG else ident(schema)
         run(cur, f"CREATE SCHEMA IF NOT EXISTS {target}", f"create schema {schema}")
-        print(f"  ✓ schema {schema}")
+        print(f"  ok schema {schema}")
 
-def migrate_table(src_cur, dst_cur, schema: str, table: str) -> int:
+def create_volume(cur) -> str:
+    """Create the staging volume if needed; return its /Volumes path."""
+    if not CATALOG:
+        sys.exit(
+            "DATABRICKS_CATALOG must be set: staging volumes require a "
+            "three-level Unity Catalog namespace."
+        )
+    name = f"{ident(CATALOG)}.{ident(STAGE_SCHEMA)}.{ident(STAGE_VOLUME)}"
+    run(cur, f"CREATE VOLUME IF NOT EXISTS {name}", f"create volume {STAGE_VOLUME}")
+    print(f"  ok volume {CATALOG}.{STAGE_SCHEMA}.{STAGE_VOLUME}")
+    return f"/Volumes/{CATALOG}/{STAGE_SCHEMA}/{STAGE_VOLUME}"
+
+def migrate_table(src_cur, dst_cur, schema: str, table: str, volume_root: str,
+                  run_dir: str, local_root: Path) -> tuple[int, int, list[str]]:
+    """
+    Export -> upload -> DROP/CREATE/COPY INTO one table.
+
+    Returns (expected_rows, loaded_rows, uploaded_paths).
+    """
     src_cur.execute(f"PRAGMA table_info({sq_ident(table)})")
     info = src_cur.fetchall()
     if not info:
         print(f"  ! {table}: no columns, skipping")
-        return 0
+        return 0, 0, []
 
     columns = [(r[1], r[2]) for r in info]
-    col_names = [c[0] for c in columns]
+    plan = plan_table_types(src_cur, table, columns)
 
-    # Determine effective types (may differ from declared due to SQLite's loose typing)
-    col_types = effective_types(src_cur, table, columns)
+    src_cur.execute(f"SELECT COUNT(*) FROM {sq_ident(table)}")
+    expected = src_cur.fetchone()[0]
 
-    # Full refresh
+    # --- 1. export locally
+    local_dir = local_root / schema / table
+    files = export_table(src_cur, table, plan, local_dir)
+
+    # --- 2. upload to the volume
+    remote_dir = f"{volume_root}/{run_dir}/{schema}/{table}"
+    uploaded: list[str] = []
+    for path in files:
+        uc_path = f"{remote_dir}/{path.name}"
+        upload_file(uc_path, path)
+        uploaded.append(uc_path)
+
+    # --- 3. recreate the Delta table
     target = qualified(schema, table)
     run(dst_cur, f"DROP TABLE IF EXISTS {target}", f"drop {schema}.{table}")
 
-    ddl_cols = ",\n  ".join(f"{ident(n)} {t}" for n, t in zip(col_names, col_types))
+    ddl_cols = ",\n  ".join(f"{ident(n)} {t}" for n, t in plan)
     run(dst_cur, f"CREATE TABLE {target} (\n  {ddl_cols}\n) USING DELTA",
         f"create {schema}.{table}")
 
-    col_list = ", ".join(ident(c) for c in col_names)
-    select_list = ", ".join(sq_ident(c) for c in col_names)
-
-    src_cur.execute(f"SELECT {select_list} FROM {sq_ident(table)}")
-
-    total = 0
-    while True:
-        rows = src_cur.fetchmany(ROWS_PER_STATEMENT)
-        if not rows:
-            break
-        values = ",\n  ".join(
-            "(" + ", ".join(literal(v) for v in row) + ")" for row in rows
-        )
+    # --- 4. load from the volume
+    if uploaded:
         run(
             dst_cur,
-            f"INSERT INTO {target} ({col_list}) VALUES\n  {values}",
-            f"insert into {schema}.{table}",
+            f"COPY INTO {target}\nFROM {sql_str(remote_dir)}\nFILEFORMAT = PARQUET",
+            f"copy into {schema}.{table}",
         )
-        total += len(rows)
 
-    return total
+    dst_cur.execute(f"SELECT COUNT(*) FROM {target}")
+    loaded = dst_cur.fetchone()[0]
+
+    # Local Parquet is no longer needed once uploaded.
+    shutil.rmtree(local_dir, ignore_errors=True)
+    return expected, loaded, uploaded
 
 def migrate_view(src_cur, dst_cur, schema: str, view: str, table_map: dict) -> None:
     src_cur.execute(
@@ -168,8 +269,6 @@ def migrate_view(src_cur, dst_cur, schema: str, view: str, table_map: dict) -> N
         return
 
     ddl = row[0]
-
-    # Split off the view body so we can rebuild the header ourselves.
     match = re.match(
         r'^\s*CREATE\s+(?:OR\s+REPLACE\s+)?VIEW\s+[`"\[]?\w+[`"\]]?\s+AS\s+',
         ddl,
@@ -192,7 +291,7 @@ def migrate_view(src_cur, dst_cur, schema: str, view: str, table_map: dict) -> N
     target = qualified(schema, view)
     run(dst_cur, f"DROP VIEW IF EXISTS {target}", f"drop view {schema}.{view}")
     run(dst_cur, f"CREATE VIEW {target} AS\n{body}", f"create view {schema}.{view}")
-    print(f"  ✓ view {schema}.{view}")
+    print(f"  ok view {schema}.{view}")
 
 # ---------------------------------------------------------------- main
 
@@ -215,20 +314,30 @@ def main() -> None:
     table_map = {t: V1_SCHEMA for t in v1_tables}
     table_map.update({t: V2_SCHEMA for t in v2_tables})
 
+    run_dir = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    local_root = Path(tempfile.mkdtemp(prefix="f1-stage-"))
+
     print(f"Source: {SQLITE_PATH}")
     print(f"  {len(v1_tables)} v1 tables -> {V1_SCHEMA}")
     print(f"  {len(v2_tables)} v2 tables -> {V2_SCHEMA}")
-    print(f"Target: {SERVER_HOSTNAME}{f' catalog={CATALOG}' if CATALOG else ''}\n")
+    print(f"Target: {SERVER_HOSTNAME} catalog={CATALOG}")
+    print(f"Staging: {local_root} -> /Volumes/{CATALOG}/{STAGE_SCHEMA}/{STAGE_VOLUME}/{run_dir}\n")
 
     conn = dbsql.connect(
         server_hostname=SERVER_HOSTNAME,
         http_path=HTTP_PATH,
         access_token=ACCESS_TOKEN,
     )
+
+    uploaded_paths: list[str] = []
+    mismatches: list[tuple[str, int, int]] = []
+    total_rows = 0
+
     try:
         with conn.cursor() as dst_cur:
-            print("[schemas]")
+            print("[setup]")
             create_schemas(dst_cur)
+            volume_root = create_volume(dst_cur)
 
             for label, schema, tables in (
                 ("v1", V1_SCHEMA, v1_tables),
@@ -236,23 +345,41 @@ def main() -> None:
             ):
                 print(f"\n[{label}] -> {schema}")
                 for t in tables:
-                    n = migrate_table(src_cur, dst_cur, schema, t)
-                    print(f"  ✓ {t:<34} {n:>8} rows")
+                    expected, loaded, paths = migrate_table(
+                        src_cur, dst_cur, schema, t, volume_root, run_dir, local_root
+                    )
+                    uploaded_paths.extend(paths)
+                    total_rows += loaded
+                    note = "" if expected == loaded else "   <-- MISMATCH"
+                    if expected != loaded:
+                        mismatches.append((f"{schema}.{t}", expected, loaded))
+                    print(f"  ok {t:<34} {loaded:>9} rows{note}")
 
             print("\n[views]")
             migrate_view(src_cur, dst_cur, V2_SCHEMA, VIEW_NAME, table_map)
 
             print("\n[verify]")
-            for schema, tables in ((V1_SCHEMA, v1_tables), (V2_SCHEMA, v2_tables)):
-                for t in tables:
-                    dst_cur.execute(f"SELECT COUNT(*) FROM {qualified(schema, t)}")
-                    print(f"  {schema}.{t:<32} {dst_cur.fetchone()[0]:>8}")
             dst_cur.execute(f"SELECT COUNT(*) FROM {qualified(V2_SCHEMA, VIEW_NAME)}")
-            print(f"  {V2_SCHEMA}.{VIEW_NAME:<32} {dst_cur.fetchone()[0]:>8}")
+            print(f"  {V2_SCHEMA}.{VIEW_NAME:<32} {dst_cur.fetchone()[0]:>9}")
+            print(f"\n  total rows loaded: {total_rows:,}")
+            if mismatches:
+                print(f"  {len(mismatches)} table(s) with row-count mismatch:", file=sys.stderr)
+                for name, exp, got in mismatches:
+                    print(f"    {name}: sqlite={exp:,} databricks={got:,}", file=sys.stderr)
     finally:
         conn.close()
         src.close()
+        shutil.rmtree(local_root, ignore_errors=True)
 
+    # --- staging cleanup (best effort; never fails the run)
+    print("\n[cleanup]")
+    removed = sum(1 for p in uploaded_paths if delete_file(p))
+    for p in uploaded_paths:
+        delete_file(f"{p.rsplit('/', 1)[0]}")  # per-table directory
+    print(f"  removed {removed}/{len(uploaded_paths)} staged file(s)")
+
+    if mismatches:
+        sys.exit(1)
     print("\nDone.")
 
 if __name__ == "__main__":

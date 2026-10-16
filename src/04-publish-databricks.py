@@ -266,6 +266,19 @@ def migrate_table(src_conn, src_cur, dst_cur, schema: str, table: str,
     shutil.rmtree(local_dir, ignore_errors=True)
     return expected, loaded, uploaded
 
+def to_spark_identifiers(sql: str) -> str:
+    """
+    Convert SQLite double-quoted identifiers to Spark backticks.
+
+    SQLite accepts "rank" as a quoted identifier; Spark SQL treats double
+    quotes as string literals, so reserved words must be backticked instead.
+    """
+    return re.sub(
+        r'"([^"]*)"',
+        lambda m: "`" + m.group(1).replace("`", "``") + "`",
+        sql,
+    )
+
 def migrate_view(src_cur, dst_cur, schema: str, view: str, table_map: dict) -> None:
     src_cur.execute(
         "SELECT sql FROM sqlite_master WHERE type='view' AND name=?", (view,)
@@ -286,14 +299,19 @@ def migrate_view(src_cur, dst_cur, schema: str, view: str, table_map: dict) -> N
         return
     body = ddl[match.end():]
 
-    # Qualify every table reference, longest names first so that
-    # 'v2_driver' is rewritten before 'driver'.
+    # Rewrite table references ONLY where they follow FROM or JOIN.
+    # Anchoring to those keywords stops column aliases that happen to share a
+    # table's name (e.g. `AS round`) from being rewritten into table refs.
+    # Longest names first so `v2_session_entry` is tried before `session_entry`.
     for tbl, dest_schema in sorted(table_map.items(), key=lambda kv: -len(kv[0])):
         body = re.sub(
-            rf"(?<![\w.`]){re.escape(tbl)}(?![\w`])",
-            qualified(dest_schema, tbl),
+            rf"(?i)(\bFROM\s+|\bJOIN\s+){re.escape(tbl)}(?![\w`])",
+            lambda m, ds=dest_schema, t=tbl: f"{m.group(1)}{qualified(ds, t)}",
             body,
         )
+
+    # SQLite double-quoted identifiers -> Spark backticks.
+    body = to_spark_identifiers(body)
 
     target = qualified(schema, view)
     run(dst_cur, f"DROP VIEW IF EXISTS {target}", f"drop view {schema}.{view}")

@@ -1,658 +1,15 @@
-# dbt/models/sources.yml
 version: 2
 
 sources:
   - name: main
-    description: "SQLite database with normalized F1 data (v2 schema)"
+    description: "Transformed F1 data (clean API for downstream consumption)"
     loader: "Python build script + migration SQL"
 
     tables:
       # ============================================================
-      # DIMENSION TABLES
+      # CORE DIMENSION TABLES
       # ============================================================
 
-      - name: v2_season
-        description: "F1 racing seasons with metadata (no api_id)"
-        columns:
-          - name: id
-            description: "Primary key"
-            tests:
-              - unique
-              - not_null
-          - name: year
-            description: "Season year"
-            tests:
-              - unique
-          - name: championship_system_id
-            description: "FK to championship_system"
-            tests:
-              - relationships:
-                  to: source('main', 'championship_system')
-                  field: id
-          - name: wikipedia
-            description: "Wikipedia page URL"
-
-      - name: v2_circuit
-        description: "Circuit/tracks information (no api_id)"
-        columns:
-          - name: id
-            description: "Primary key"
-            tests:
-              - unique
-              - not_null
-          - name: name
-            description: "Circuit name"
-          - name: reference
-            description: "Circuit reference code"
-          - name: locality
-            description: "City/locality"
-          - name: country
-            description: "Country name"
-          - name: country_code
-            description: "ISO country code"
-          - name: latitude
-            description: "Latitude coordinate"
-          - name: longitude
-            description: "Longitude coordinate"
-          - name: altitude
-            description: "Altitude in meters"
-          - name: wikipedia
-            description: "Wikipedia page URL"
-
-      - name: v2_driver
-        description: "Driver master data (no api_id, nationality moved to v2_driver_season)"
-        columns:
-          - name: id
-            description: "Primary key"
-            tests:
-              - unique
-              - not_null
-          - name: reference
-            description: "Driver reference code"
-          - name: abbreviation
-            description: "Driver abbreviation"
-          - name: forename
-            description: "First name"
-          - name: surname
-            description: "Last name"
-          - name: date_of_birth
-            description: "Date of birth"
-          - name: permanent_car_number
-            description: "Permanent race number"
-          - name: birth_country
-            description: "Birth country"
-          - name: wikipedia
-            description: "Wikipedia page URL"
-
-      - name: v2_constructor
-        description: "Constructor/team master data (renamed from 'team', no api_id)"
-        columns:
-          - name: id
-            description: "Primary key"
-            tests:
-              - unique
-              - not_null
-          - name: name
-            description: "Constructor name"
-          - name: reference
-            description: "Constructor reference code"
-            tests:
-              - unique
-          - name: base_constructor_id
-            description: "FK to base_constructor for team lineage"
-            tests:
-              - relationships:
-                  to: source('main', 'base_team')
-                  field: id
-          - name: primary_color
-            description: "Primary constructor color"
-          - name: wikipedia
-            description: "Wikipedia page URL"
-
-      - name: v2_engine
-        description: "Engine/power unit manufacturers (NEW)"
-        columns:
-          - name: id
-            description: "Primary key"
-            tests:
-              - unique
-              - not_null
-          - name: name
-            description: "Engine manufacturer name"
-          - name: reference
-            description: "Reference code"
-            tests:
-              - unique
-          - name: nationality
-            description: "Manufacturer nationality"
-          - name: founded_year
-            description: "Year founded"
-          - name: wikipedia
-            description: "Wikipedia page URL"
-
-      - name: base_team
-        description: "Base/parent team groupings (unchanged)"
-        columns:
-          - name: id
-            description: "Primary key"
-            tests:
-              - unique
-              - not_null
-          - name: name
-            description: "Base team name"
-          - name: api_id
-            description: "Jolpiка API identifier"
-
-      - name: points_system
-        description: "Points allocation rules (unchanged)"
-        columns:
-          - name: id
-            description: "Primary key"
-            tests:
-              - unique
-              - not_null
-          - name: name
-            description: "Points system name"
-          - name: reference
-            description: "Reference code"
-          - name: partial
-            description: "Partial season flag"
-          - name: driver_position_points
-            description: "Driver position points"
-          - name: driver_fastest_lap
-            description: "Fastest lap bonus for drivers"
-          - name: team_position_points
-            description: "Team position points"
-          - name: team_fastest_lap
-            description: "Fastest lap bonus for teams"
-          - name: shared_drive
-            description: "Shared drive allowance"
-          - name: is_double_points
-            description: "Double points flag"
-          - name: api_id
-            description: "Jolpiка API identifier"
-
-      - name: championship_system
-        description: "Championship calculation rules (unchanged)"
-        columns:
-          - name: id
-            description: "Primary key"
-            tests:
-              - unique
-              - not_null
-          - name: name
-            description: "System name"
-          - name: reference
-            description: "Reference code"
-          - name: driver_best_results
-            description: "Best results count for drivers"
-          - name: team_best_results
-            description: "Best results count for teams"
-          - name: driver_season_split
-            description: "Driver season split"
-          - name: team_season_split
-            description: "Team season split"
-          - name: team_points_per_session
-            description: "Team points per session flag"
-          - name: eligibility
-            description: "Eligibility rules"
-          - name: api_id
-            description: "Jolpiка API identifier"
-
-      # ============================================================
-      # ATTRIBUTE HISTORY TABLES (NEW)
-      # ============================================================
-
-      - name: v2_driver_season
-        description: "Driver nationality per season (NEW for temporal tracking)"
-        columns:
-          - name: driver_id
-            description: "FK to v2_driver"
-            tests:
-              - relationships:
-                  to: source('main', 'v2_driver')
-                  field: id
-          - name: season_id
-            description: "FK to v2_season"
-            tests:
-              - relationships:
-                  to: source('main', 'v2_season')
-                  field: id
-          - name: nationality
-            description: "Nationality for that season"
-          - name: country_code
-            description: "ISO country code"
-        unique_key:
-          - driver_id
-          - season_id
-
-      - name: v2_constructor_season
-        description: "Constructor name/nationality per season (NEW for temporal tracking)"
-        columns:
-          - name: constructor_id
-            description: "FK to v2_constructor"
-            tests:
-              - relationships:
-                  to: source('main', 'v2_constructor')
-                  field: id
-          - name: season_id
-            description: "FK to v2_season"
-            tests:
-              - relationships:
-                  to: source('main', 'v2_season')
-                  field: id
-          - name: name
-            description: "Name used that season"
-          - name: nationality
-            description: "Nationality for that season"
-          - name: country_code
-            description: "ISO country code"
-          - name: base_constructor_id
-            description: "Team lineage reference"
-        unique_key:
-          - constructor_id
-          - season_id
-
-      - name: v2_constructor_engine
-        description: "Constructor-engine relationships per season (NEW)"
-        columns:
-          - name: constructor_id
-            description: "FK to v2_constructor"
-            tests:
-              - relationships:
-                  to: source('main', 'v2_constructor')
-                  field: id
-          - name: season_id
-            description: "FK to v2_season"
-            tests:
-              - relationships:
-                  to: source('main', 'v2_season')
-                  field: id
-          - name: engine_id
-            description: "FK to v2_engine"
-            tests:
-              - relationships:
-                  to: source('main', 'v2_engine')
-                  field: id
-          - name: engine_ref_override
-            description: "Optional override for custom entries"
-        unique_key:
-          - constructor_id
-          - season_id
-
-      # ============================================================
-      # EVENT TABLES
-      # ============================================================
-
-      - name: v2_round
-        description: "Race rounds/events (no api_id)"
-        columns:
-          - name: id
-            description: "Primary key"
-            tests:
-              - unique
-              - not_null
-          - name: season_id
-            description: "FK to v2_season"
-            tests:
-              - relationships:
-                  to: source('main', 'v2_season')
-                  field: id
-          - name: circuit_id
-            description: "FK to v2_circuit"
-            tests:
-              - relationships:
-                  to: source('main', 'v2_circuit')
-                  field: id
-          - name: number
-            description: "Round number"
-          - name: name
-            description: "Event name"
-          - name: date
-            description: "Event date"
-          - name: is_cancelled
-            description: "Cancelled flag"
-          - name: wikipedia
-            description: "Wikipedia page URL"
-
-      - name: v2_constructor_driver
-        description: "Constructor-driver assignments per season (renamed from team_driver)"
-        columns:
-          - name: id
-            description: "Primary key"
-            tests:
-              - unique
-              - not_null
-          - name: season_id
-            description: "FK to v2_season"
-            tests:
-              - relationships:
-                  to: source('main', 'v2_season')
-                  field: id
-          - name: constructor_id
-            description: "FK to v2_constructor"
-            tests:
-              - relationships:
-                  to: source('main', 'v2_constructor')
-                  field: id
-          - name: driver_id
-            description: "FK to v2_driver"
-            tests:
-              - relationships:
-                  to: source('main', 'v2_driver')
-                  field: id
-          - name: role
-            description: "Role type"
-
-      - name: v2_round_entry
-        description: "Entry list per race (renamed from roundentry)"
-        columns:
-          - name: id
-            description: "Primary key"
-            tests:
-              - unique
-              - not_null
-          - name: round_id
-            description: "FK to v2_round"
-            tests:
-              - relationships:
-                  to: source('main', 'v2_round')
-                  field: id
-          - name: constructor_driver_id
-            description: "FK to v2_constructor_driver"
-            tests:
-              - relationships:
-                  to: source('main', 'v2_constructor_driver')
-                  field: id
-          - name: car_number
-            description: "Car number"
-
-      - name: v2_session
-        description: "Race sessions (practice, qualifying, race, sprint)"
-        columns:
-          - name: id
-            description: "Primary key"
-            tests:
-              - unique
-              - not_null
-          - name: round_id
-            description: "FK to v2_round"
-            tests:
-              - relationships:
-                  to: source('main', 'v2_round')
-                  field: id
-          - name: type
-            description: "Session type (R=Race, Q=Qualifying, P=Practice, S=Sprint)"
-          - name: number
-            description: "Session number"
-          - name: timestamp
-            description: "Session start timestamp"
-          - name: timezone
-            description: "Timezone"
-          - name: scheduled_laps
-            description: "Scheduled laps"
-          - name: point_system_id
-            description: "FK to points_system"
-            tests:
-              - relationships:
-                  to: source('main', 'points_system')
-                  field: id
-          - name: is_cancelled
-            description: "Cancelled flag"
-          - name: has_time_data
-            description: "Has timing data flag"
-
-      - name: v2_session_entry
-        description: "Driver session results (no api_id)"
-        columns:
-          - name: id
-            description: "Primary key"
-            tests:
-              - unique
-              - not_null
-          - name: session_id
-            description: "FK to v2_session"
-            tests:
-              - relationships:
-                  to: source('main', 'v2_session')
-                  field: id
-          - name: round_entry_id
-            description: "FK to v2_round_entry"
-            tests:
-              - relationships:
-                  to: source('main', 'v2_round_entry')
-                  field: id
-          - name: grid
-            description: "Grid position"
-          - name: position
-            description: "Finishing position"
-          - name: points
-            description: "Points awarded"
-          - name: laps_completed
-            description: "Laps completed"
-          - name: fastest_lap_rank
-            description: "Fastest lap rank"
-          - name: time
-            description: "Finish time"
-          - name: detail
-            description: "Additional details"
-          - name: status
-            description: "Result status"
-          - name: is_classified
-            description: "Classified flag"
-          - name: is_eligible_for_points
-            description: "Points eligible flag"
-
-      # ============================================================
-      # CHAMPIONSHIP TABLES
-      # ============================================================
-
-      - name: v2_driver_championship
-        description: "Driver championship standings (no api_id)"
-        columns:
-          - name: id
-            description: "Primary key"
-            tests:
-              - unique
-              - not_null
-          - name: season_id
-            description: "FK to v2_season"
-            tests:
-              - relationships:
-                  to: source('main', 'v2_season')
-                  field: id
-          - name: year
-            description: "Year"
-          - name: driver_id
-            description: "FK to v2_driver"
-            tests:
-              - relationships:
-                  to: source('main', 'v2_driver')
-                  field: id
-          - name: round_id
-            description: "FK to v2_round"
-            tests:
-              - relationships:
-                  to: source('main', 'v2_round')
-                  field: id
-          - name: position
-            description: "Standings position"
-          - name: points
-            description: "Championship points"
-          - name: win_count
-            description: "Number of wins"
-          - name: highest_finish
-            description: "Highest finish"
-          - name: is_eligible
-            description: "Eligible flag"
-          - name: adjustment_type
-            description: "Adjustment type"
-          - name: session_id
-            description: "FK to v2_session"
-            tests:
-              - relationships:
-                  to: source('main', 'v2_session')
-                  field: id
-          - name: session_number
-            description: "Session number"
-          - name: round_number
-            description: "Round number"
-
-      - name: v2_constructor_championship
-        description: "Constructor championship standings (renamed from team_championship)"
-        columns:
-          - name: id
-            description: "Primary key"
-            tests:
-              - unique
-              - not_null
-          - name: season_id
-            description: "FK to v2_season"
-            tests:
-              - relationships:
-                  to: source('main', 'v2_season')
-                  field: id
-          - name: year
-            description: "Year"
-          - name: constructor_id
-            description: "FK to v2_constructor"
-            tests:
-              - relationships:
-                  to: source('main', 'v2_constructor')
-                  field: id
-          - name: round_id
-            description: "FK to v2_round"
-            tests:
-              - relationships:
-                  to: source('main', 'v2_round')
-                  field: id
-          - name: position
-            description: "Standings position"
-          - name: points
-            description: "Championship points"
-          - name: win_count
-            description: "Number of wins"
-          - name: highest_finish
-            description: "Highest finish"
-          - name: is_eligible
-            description: "Eligible flag"
-          - name: adjustment_type
-            description: "Adjustment type"
-          - name: session_id
-            description: "FK to v2_session"
-          - name: session_number
-            description: "Session number"
-          - name: round_number
-            description: "Round number"
-
-      # ============================================================
-      # DETAIL TABLES
-      # ============================================================
-
-      - name: v2_lap
-        description: "Per-lap data (no api_id)"
-        columns:
-          - name: id
-            description: "Primary key"
-            tests:
-              - unique
-              - not_null
-          - name: session_entry_id
-            description: "FK to v2_session_entry"
-            tests:
-              - relationships:
-                  to: source('main', 'v2_session_entry')
-                  field: id
-          - name: number
-            description: "Lap number"
-          - name: position
-            description: "Position on lap"
-          - name: time
-            description: "Lap time"
-          - name: average_speed
-            description: "Average speed"
-          - name: is_fastest_lap
-            description: "Fastest lap flag"
-          - name: is_deleted
-            description: "Deleted flag"
-
-      - name: v2_pit_stop
-        description: "Pit stop events (no api_id)"
-        columns:
-          - name: id
-            description: "Primary key"
-            tests:
-              - unique
-              - not_null
-          - name: session_entry_id
-            description: "FK to v2_session_entry"
-            tests:
-              - relationships:
-                  to: source('main', 'v2_session_entry')
-                  field: id
-          - name: lap_id
-            description: "FK to v2_lap"
-            tests:
-              - relationships:
-                  to: source('main', 'v2_lap')
-                  field: id
-          - name: number
-            description: "Pit stop number"
-          - name: duration
-            description: "Duration"
-          - name: local_timestamp
-            description: "Timestamp"
-
-      - name: v2_penalty
-        description: "Driver penalties (no api_id)"
-        columns:
-          - name: id
-            description: "Primary key"
-            tests:
-              - unique
-              - not_null
-          - name: earned_session_entry_id
-            description: "FK to v2_session_entry (where earned)"
-          - name: served_session_entry_id
-            description: "FK to v2_session_entry (where served)"
-          - name: position
-            description: "Penalty position"
-          - name: license_points
-            description: "License points"
-          - name: is_time_served_in_pit
-            description: "In-pit flag"
-          - name: time
-            description: "Penalty time"
-
-      # ============================================================
-      # LOOKUP TABLES
-      # ============================================================
-
-      - name: v2_countries
-        description: "Country code to country name mapping (renamed from _countries_lookup)"
-        columns:
-          - name: id
-            description: "Primary key"
-            tests:
-              - unique
-              - not_null
-          - name: country_code
-            description: "ISO country code"
-            tests:
-              - unique
-          - name: country
-            description: "Country name"
-          - name: iso_alpha3
-            description: "ISO alpha-3 code"
-          - name: continent
-            description: "Continent"
-
-      # ============================================================
-      # KEEP OLD TABLES AVAILABLE FOR OTHER PROJECTS
-      # (These remain in database but not referenced by this dbt project)
-      # NOTE: Removed duplicate definitions of base_team, points_system,
-      # championship_system which already exist above with same name.
-      # ============================================================
       - name: season
         description: "F1 racing seasons with metadata"
         columns:
@@ -665,8 +22,6 @@ sources:
             description: "Season year"
             tests:
               - unique
-          - name: api_id
-            description: "Jolpiка API identifier"
           - name: championship_system_id
             description: "FK to championship_system"
             tests:
@@ -702,11 +57,9 @@ sources:
             description: "Altitude in meters"
           - name: wikipedia
             description: "Wikipedia page URL"
-          - name: api_id
-            description: "Jolpiка API identifier"
 
       - name: driver
-        description: "Driver master data"
+        description: "Driver master data (nationality moved to driver_season)"
         columns:
           - name: id
             description: "Primary key"
@@ -721,21 +74,17 @@ sources:
             description: "First name"
           - name: surname
             description: "Last name"
-          - name: nationality
-            description: "Driver nationality"
-          - name: country_code
-            description: "ISO country code"
           - name: date_of_birth
             description: "Date of birth"
           - name: permanent_car_number
             description: "Permanent race number"
+          - name: birth_country
+            description: "Birth country"
           - name: wikipedia
             description: "Wikipedia page URL"
-          - name: api_id
-            description: "Jolpiка API identifier"
 
-      - name: team
-        description: "Team/constructor master data"
+      - name: constructor
+        description: "Constructor/team master data"
         columns:
           - name: id
             description: "Primary key"
@@ -743,25 +92,196 @@ sources:
               - unique
               - not_null
           - name: name
-            description: "Team name"
+            description: "Constructor name"
           - name: reference
-            description: "Team reference code"
-          - name: nationality
-            description: "Team nationality"
-          - name: country_code
-            description: "ISO country code"
-          - name: base_team_id
-            description: "FK to base_team"
+            description: "Constructor reference code"
+            tests:
+              - unique
+          - name: constructor_base_id
+            description: "FK to constructor_base for team lineage"
             tests:
               - relationships:
-                  to: source('main', 'base_team')
+                  to: source('main', 'constructor_base')
                   field: id
           - name: primary_color
-            description: "Primary team color"
+            description: "Primary constructor color"
           - name: wikipedia
             description: "Wikipedia page URL"
+
+      - name: engine
+        description: "Engine/power unit manufacturers"
+        columns:
+          - name: id
+            description: "Primary key"
+            tests:
+              - unique
+              - not_null
+          - name: name
+            description: "Engine manufacturer name"
+          - name: reference
+            description: "Reference code"
+            tests:
+              - unique
+          - name: nationality
+            description: "Manufacturer nationality"
+          - name: founded_year
+            description: "Year founded"
+          - name: wikipedia
+            description: "Wikipedia page URL"
+
+      - name: constructor_base
+        description: "Base/parent constructor groupings"
+        columns:
+          - name: id
+            description: "Primary key"
+            tests:
+              - unique
+              - not_null
+          - name: name
+            description: "Base constructor name"
           - name: api_id
-            description: "Jolpiка API identifier"
+            description: "Jolpica API identifier"
+
+      - name: points_system
+        description: "Points allocation rules"
+        columns:
+          - name: id
+            description: "Primary key"
+            tests:
+              - unique
+              - not_null
+          - name: name
+            description: "Points system name"
+          - name: reference
+            description: "Reference code"
+          - name: partial
+            description: "Partial season flag"
+          - name: driver_position_points
+            description: "Driver position points"
+          - name: driver_fastest_lap
+            description: "Fastest lap bonus for drivers"
+          - name: team_position_points
+            description: "Team position points"
+          - name: team_fastest_lap
+            description: "Fastest lap bonus for teams"
+          - name: shared_drive
+            description: "Shared drive allowance"
+          - name: is_double_points
+            description: "Double points flag"
+          - name: api_id
+            description: "Jolpica API identifier"
+
+      - name: championship_system
+        description: "Championship calculation rules"
+        columns:
+          - name: id
+            description: "Primary key"
+            tests:
+              - unique
+              - not_null
+          - name: name
+            description: "System name"
+          - name: reference
+            description: "Reference code"
+          - name: driver_best_results
+            description: "Best results count for drivers"
+          - name: team_best_results
+            description: "Best results count for teams"
+          - name: driver_season_split
+            description: "Driver season split"
+          - name: team_season_split
+            description: "Team season split"
+          - name: team_points_per_session
+            description: "Team points per session flag"
+          - name: eligibility
+            description: "Eligibility rules"
+          - name: api_id
+            description: "Jolpica API identifier"
+
+      # ============================================================
+      # ATTRIBUTE HISTORY TABLES
+      # ============================================================
+
+      - name: driver_season
+        description: "Driver nationality per season (temporal tracking)"
+        columns:
+          - name: driver_id
+            description: "FK to driver"
+            tests:
+              - relationships:
+                  to: source('main', 'driver')
+                  field: id
+          - name: season_id
+            description: "FK to season"
+            tests:
+              - relationships:
+                  to: source('main', 'season')
+                  field: id
+          - name: nationality
+            description: "Nationality for that season"
+          - name: country_code
+            description: "ISO country code"
+        unique_key:
+          - driver_id
+          - season_id
+
+      - name: constructor_season
+        description: "Constructor name/nationality per season (temporal tracking)"
+        columns:
+          - name: constructor_id
+            description: "FK to constructor"
+            tests:
+              - relationships:
+                  to: source('main', 'constructor')
+                  field: id
+          - name: season_id
+            description: "FK to season"
+            tests:
+              - relationships:
+                  to: source('main', 'season')
+                  field: id
+          - name: name
+            description: "Name used that season"
+          - name: nationality
+            description: "Nationality for that season"
+          - name: country_code
+            description: "ISO country code"
+          - name: constructor_base_id
+            description: "Team lineage reference"
+        unique_key:
+          - constructor_id
+          - season_id
+
+      - name: constructor_engine
+        description: "Constructor-engine relationships per season"
+        columns:
+          - name: constructor_id
+            description: "FK to constructor"
+            tests:
+              - relationships:
+                  to: source('main', 'constructor')
+                  field: id
+          - name: season_id
+            description: "FK to season"
+            tests:
+              - relationships:
+                  to: source('main', 'season')
+                  field: id
+          - name: engine_id
+            description: "FK to engine"
+            tests:
+              - relationships:
+                  to: source('main', 'engine')
+                  field: id
+          - name: engine_ref_override
+            description: "Optional override for custom entries"
+        unique_key:
+          - constructor_id
+          - season_id
+
+      # ============================================================
+      # EVENT TABLES
+      # ============================================================
 
       - name: round
         description: "Race rounds/events"
@@ -785,8 +305,6 @@ sources:
                   field: id
           - name: number
             description: "Round number"
-          - name: race_number
-            description: "Race sequence number"
           - name: name
             description: "Event name"
           - name: date
@@ -795,11 +313,9 @@ sources:
             description: "Cancelled flag"
           - name: wikipedia
             description: "Wikipedia page URL"
-          - name: api_id
-            description: "Jolpiка API identifier"
 
-      - name: team_driver
-        description: "Team-driver assignments per season"
+      - name: constructor_driver
+        description: "Constructor-driver assignments per season"
         columns:
           - name: id
             description: "Primary key"
@@ -812,11 +328,11 @@ sources:
               - relationships:
                   to: source('main', 'season')
                   field: id
-          - name: team_id
-            description: "FK to team"
+          - name: constructor_id
+            description: "FK to constructor"
             tests:
               - relationships:
-                  to: source('main', 'team')
+                  to: source('main', 'constructor')
                   field: id
           - name: driver_id
             description: "FK to driver"
@@ -826,10 +342,8 @@ sources:
                   field: id
           - name: role
             description: "Role type"
-          - name: api_id
-            description: "Jolpiка API identifier"
 
-      - name: roundentry
+      - name: round_entry
         description: "Entry list per race"
         columns:
           - name: id
@@ -843,19 +357,17 @@ sources:
               - relationships:
                   to: source('main', 'round')
                   field: id
-          - name: team_driver_id
-            description: "FK to team_driver"
+          - name: constructor_driver_id
+            description: "FK to constructor_driver"
             tests:
               - relationships:
-                  to: source('main', 'team_driver')
+                  to: source('main', 'constructor_driver')
                   field: id
           - name: car_number
             description: "Car number"
-          - name: api_id
-            description: "Jolpiка API identifier"
 
       - name: session
-        description: "Race sessions (practice, qualifying, race)"
+        description: "Race sessions (practice, qualifying, race, sprint)"
         columns:
           - name: id
             description: "Primary key"
@@ -869,7 +381,7 @@ sources:
                   to: source('main', 'round')
                   field: id
           - name: type
-            description: "Session type"
+            description: "Session type (R=Race, Q=Qualifying, P=Practice, S=Sprint)"
           - name: number
             description: "Session number"
           - name: timestamp
@@ -888,8 +400,6 @@ sources:
             description: "Cancelled flag"
           - name: has_time_data
             description: "Has timing data flag"
-          - name: api_id
-            description: "Jolpiка API identifier"
 
       - name: session_entry
         description: "Driver session results"
@@ -906,10 +416,10 @@ sources:
                   to: source('main', 'session')
                   field: id
           - name: round_entry_id
-            description: "FK to roundentry"
+            description: "FK to round_entry"
             tests:
               - relationships:
-                  to: source('main', 'roundentry')
+                  to: source('main', 'round_entry')
                   field: id
           - name: grid
             description: "Grid position"
@@ -931,8 +441,10 @@ sources:
             description: "Classified flag"
           - name: is_eligible_for_points
             description: "Points eligible flag"
-          - name: api_id
-            description: "Jolpiка API identifier"
+
+      # ============================================================
+      # CHAMPIONSHIP TABLES
+      # ============================================================
 
       - name: driver_championship
         description: "Driver championship standings"
@@ -985,8 +497,8 @@ sources:
           - name: round_number
             description: "Round number"
 
-      - name: team_championship
-        description: "Team championship standings"
+      - name: constructor_championship
+        description: "Constructor championship standings"
         columns:
           - name: id
             description: "Primary key"
@@ -995,12 +507,24 @@ sources:
               - not_null
           - name: season_id
             description: "FK to season"
+            tests:
+              - relationships:
+                  to: source('main', 'season')
+                  field: id
           - name: year
             description: "Year"
-          - name: team_id
-            description: "FK to team"
+          - name: constructor_id
+            description: "FK to constructor"
+            tests:
+              - relationships:
+                  to: source('main', 'constructor')
+                  field: id
           - name: round_id
             description: "FK to round"
+            tests:
+              - relationships:
+                  to: source('main', 'round')
+                  field: id
           - name: position
             description: "Standings position"
           - name: points
@@ -1019,6 +543,10 @@ sources:
             description: "Session number"
           - name: round_number
             description: "Round number"
+
+      # ============================================================
+      # DETAIL TABLES
+      # ============================================================
 
       - name: lap
         description: "Per-lap data"
@@ -1042,12 +570,10 @@ sources:
             description: "Lap time"
           - name: average_speed
             description: "Average speed"
-          - name: is_entry_fastest_lap
+          - name: is_fastest_lap
             description: "Fastest lap flag"
           - name: is_deleted
             description: "Deleted flag"
-          - name: api_id
-            description: "Jolpiка API identifier"
 
       - name: pit_stop
         description: "Pit stop events"
@@ -1075,8 +601,6 @@ sources:
             description: "Duration"
           - name: local_timestamp
             description: "Timestamp"
-          - name: api_id
-            description: "Jolpiка API identifier"
 
       - name: penalty
         description: "Driver penalties"
@@ -1086,10 +610,10 @@ sources:
             tests:
               - unique
               - not_null
-          - name: earned_id
-            description: "Earned ID"
-          - name: served_id
-            description: "Served ID"
+          - name: earned_session_entry_id
+            description: "FK to session_entry (where earned)"
+          - name: served_session_entry_id
+            description: "FK to session_entry (where served)"
           - name: position
             description: "Penalty position"
           - name: license_points
@@ -1098,48 +622,26 @@ sources:
             description: "In-pit flag"
           - name: time
             description: "Penalty time"
-          - name: api_id
-            description: "Jolpiка API identifier"
 
-      - name: championship_adjustment
-        description: "Championship point adjustments"
+      # ============================================================
+      # LOOKUP TABLES
+      # ============================================================
+
+      - name: countries
+        description: "Country code to country name mapping"
         columns:
           - name: id
             description: "Primary key"
             tests:
               - unique
               - not_null
-          - name: adjustment
-            description: "Adjustment value"
-          - name: api_id
-            description: "Jolpiка API identifier"
-          - name: driver_id
-            description: "FK to driver"
-            tests:
-              - relationships:
-                  to: source('main', 'driver')
-                  field: id
-          - name: points
-            description: "Points adjustment"
-          - name: season_id
-            description: "FK to season"
-            tests:
-              - relationships:
-                  to: source('main', 'season')
-                  field: id
-          - name: team_id
-            description: "FK to team"
-            tests:
-              - relationships:
-                  to: source('main', 'team')
-                  field: id
-
-      - name: _countries_lookup
-        description: "Country code to country name mapping"
-        columns:
           - name: country_code
             description: "ISO country code"
             tests:
               - unique
           - name: country
             description: "Country name"
+          - name: iso_alpha3
+            description: "ISO alpha-3 code"
+          - name: continent
+            description: "Continent"

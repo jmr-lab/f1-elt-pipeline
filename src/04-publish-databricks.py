@@ -1,17 +1,14 @@
 #!/usr/bin/env python3
 """
-Publish the transformed F1 SQLite database to Databricks.
+Publish the F1 SQLite database to Databricks.
 
 Strategy: stage-and-COPY-INTO
   1. Export each SQLite table to Parquet locally (pandas + pyarrow)
   2. Upload the Parquet files to a Unity Catalog volume (Files API)
   3. DROP/CREATE the Delta tables and COPY INTO them from the volume
-  4. Recreate the f1summary view (if it exists in source)
-  5. Verify row counts against SQLite, then clean up staging
+  4. Verify row counts against SQLite, then clean up staging
 
-Routing:
-  jolpica  <- v1 tables (anything not prefixed v2_)
-  jmr_lab  <- v2_ tables, plus the f1summary view
+All tables are published to the jolpica schema.
 
 Requires: pip install "databricks-sql-connector>=3.0" pandas pyarrow requests
 """
@@ -19,7 +16,6 @@ Requires: pip install "databricks-sql-connector>=3.0" pandas pyarrow requests
 from __future__ import annotations
 
 import os
-import re
 import shutil
 import sqlite3
 import sys
@@ -46,15 +42,11 @@ HTTP_PATH = os.environ["DATABRICKS_HTTP_PATH"]
 ACCESS_TOKEN = os.environ["DATABRICKS_TOKEN"]
 CATALOG = env("DATABRICKS_CATALOG")
 
-V1_SCHEMA = env("JOLPICA_SCHEMA", "jolpica")
-V2_SCHEMA = env("JMRLAB_SCHEMA", "jmr_lab")
+TARGET_SCHEMA = env("JOLPICA_SCHEMA", "jolpica")
 
 # Staging volume: must live in a Unity Catalog catalog.
-STAGE_SCHEMA = env("DATABRICKS_STAGE_SCHEMA", V2_SCHEMA)
+STAGE_SCHEMA = env("DATABRICKS_STAGE_SCHEMA", TARGET_SCHEMA)
 STAGE_VOLUME = env("DATABRICKS_STAGE_VOLUME", "f1_staging")
-
-VIEW_NAME = "f1summary"
-VIEW_SQL_PATH = env("VIEW_SQL_PATH", "src/views/f1summary.spark.sql")
 
 # Rows pulled from SQLite per Parquet file. Bounds memory on large tables.
 READ_CHUNK_ROWS = int(env("READ_CHUNK_ROWS", "200000"))
@@ -76,6 +68,7 @@ def sql_str(value: str) -> str:
     return "'" + value + "'"
 
 def qualified(schema: str, table: str) -> str:
+    """Build a fully qualified table name."""
     if CATALOG:
         return f"{ident(CATALOG)}.{ident(schema)}.{ident(table)}"
     return f"{ident(schema)}.{ident(table)}"
@@ -90,6 +83,7 @@ def spark_type(sqlite_type: str) -> str:
     return "STRING"
 
 def run(cur, sql: str, label: str = "") -> None:
+    """Execute SQL, raising on error with a helpful label."""
     try:
         cur.execute(sql)
     except Exception as exc:
@@ -195,10 +189,10 @@ def delete_file(uc_path: str) -> bool:
 # ---------------------------------------------------------------- databricks
 
 def create_schemas(cur) -> None:
-    for schema in (V1_SCHEMA, V2_SCHEMA):
-        target = f"{ident(CATALOG)}.{ident(schema)}" if CATALOG else ident(schema)
-        run(cur, f"CREATE SCHEMA IF NOT EXISTS {target}", f"create schema {schema}")
-        print(f"  ok schema {schema}")
+    """Create the target schema if needed."""
+    target = f"{ident(CATALOG)}.{ident(TARGET_SCHEMA)}" if CATALOG else ident(TARGET_SCHEMA)
+    run(cur, f"CREATE SCHEMA IF NOT EXISTS {target}", f"create schema {TARGET_SCHEMA}")
+    print(f"  ok schema {TARGET_SCHEMA}")
 
 def create_volume(cur) -> str:
     """Create the staging volume if needed; return its /Volumes path."""
@@ -212,7 +206,7 @@ def create_volume(cur) -> str:
     print(f"  ok volume {CATALOG}.{STAGE_SCHEMA}.{STAGE_VOLUME}")
     return f"/Volumes/{CATALOG}/{STAGE_SCHEMA}/{STAGE_VOLUME}"
 
-def migrate_table(src_conn, src_cur, dst_cur, schema: str, table: str,
+def migrate_table(src_conn, src_cur, dst_cur, table: str,
                   volume_root: str, run_dir: str,
                   local_root: Path) -> tuple[int, int, list[str]]:
     """
@@ -233,11 +227,11 @@ def migrate_table(src_conn, src_cur, dst_cur, schema: str, table: str,
     expected = src_cur.fetchone()[0]
 
     # --- 1. export locally
-    local_dir = local_root / schema / table
+    local_dir = local_root / table
     files = export_table(src_conn, table, plan, local_dir)
 
     # --- 2. upload to the volume
-    remote_dir = f"{volume_root}/{run_dir}/{schema}/{table}"
+    remote_dir = f"{volume_root}/{run_dir}/{table}"
     uploaded: list[str] = []
     for path in files:
         uc_path = f"{remote_dir}/{path.name}"
@@ -245,19 +239,19 @@ def migrate_table(src_conn, src_cur, dst_cur, schema: str, table: str,
         uploaded.append(uc_path)
 
     # --- 3. recreate the Delta table
-    target = qualified(schema, table)
-    run(dst_cur, f"DROP TABLE IF EXISTS {target}", f"drop {schema}.{table}")
+    target = qualified(TARGET_SCHEMA, table)
+    run(dst_cur, f"DROP TABLE IF EXISTS {target}", f"drop {TARGET_SCHEMA}.{table}")
 
     ddl_cols = ",\n  ".join(f"{ident(n)} {t}" for n, t in plan)
     run(dst_cur, f"CREATE TABLE {target} (\n  {ddl_cols}\n) USING DELTA",
-        f"create {schema}.{table}")
+        f"create {TARGET_SCHEMA}.{table}")
 
     # --- 4. load from the volume
     if uploaded:
         run(
             dst_cur,
             f"COPY INTO {target}\nFROM {sql_str(remote_dir)}\nFILEFORMAT = PARQUET",
-            f"copy into {schema}.{table}",
+            f"copy into {TARGET_SCHEMA}.{table}",
         )
 
     dst_cur.execute(f"SELECT COUNT(*) FROM {target}")
@@ -266,50 +260,6 @@ def migrate_table(src_conn, src_cur, dst_cur, schema: str, table: str,
     # Local Parquet is no longer needed once uploaded.
     shutil.rmtree(local_dir, ignore_errors=True)
     return expected, loaded, uploaded
-
-def to_spark_identifiers(sql: str) -> str:
-    """
-    Convert SQLite double-quoted identifiers to Spark backticks.
-
-    SQLite accepts "rank" as a quoted identifier; Spark SQL treats double
-    quotes as string literals, so reserved words must be backticked instead.
-    """
-    return re.sub(
-        r'"([^"]*)"',
-        lambda m: "`" + m.group(1).replace("`", "``") + "`",
-        sql,
-    )
-
-def migrate_view(dst_cur, schema: str, view: str, table_map: dict) -> bool:
-    """
-    Create the view in Databricks from a Spark-native definition.
-
-    Deliberately NOT translated from the SQLite DDL: that view uses
-    SQLite-only functions (GLOB, strftime) with no Spark equivalent, so a
-    Spark-dialect definition is maintained alongside it.
-    """
-    path = Path(VIEW_SQL_PATH)
-    if not path.exists():
-        print(f"  ! view {view}: {path} not found, skipping")
-        return False
-
-    body = path.read_text(encoding="utf-8").strip().rstrip(";")
-
-    # Qualify table references ONLY where they follow FROM or JOIN, so column
-    # aliases sharing a table's name (e.g. `AS round`) are left untouched.
-    # Longest names first so `v2_session_entry` is tried before `session_entry`.
-    for tbl, dest_schema in sorted(table_map.items(), key=lambda kv: -len(kv[0])):
-        body = re.sub(
-            rf"(?i)(\bFROM\s+|\bJOIN\s+){re.escape(tbl)}(?![\w`])",
-            lambda m, ds=dest_schema, t=tbl: f"{m.group(1)}{qualified(ds, t)}",
-            body,
-        )
-
-    target = qualified(schema, view)
-    run(dst_cur, f"DROP VIEW IF EXISTS {target}", f"drop view {schema}.{view}")
-    run(dst_cur, f"CREATE VIEW {target} AS\n{body}", f"create view {schema}.{view}")
-    print(f"  ok view {schema}.{view}")
-    return True
 
 # ---------------------------------------------------------------- main
 
@@ -320,26 +270,17 @@ def main() -> None:
     src = sqlite3.connect(SQLITE_PATH)
     src_cur = src.cursor()
 
+    # Get all tables from the source database
     src_cur.execute(
         "SELECT name FROM sqlite_master "
         "WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
     )
     all_tables = [r[0] for r in src_cur.fetchall()]
 
-    v1_tables = [t for t in all_tables if not t.startswith("v2_")]
-    v2_tables = [t for t in all_tables if t.startswith("v2_")]
-
-    table_map = {t: V1_SCHEMA for t in v1_tables}
-    table_map.update({t: V2_SCHEMA for t in v2_tables})
-
-    run_dir = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    local_root = Path(tempfile.mkdtemp(prefix="f1-stage-"))
-
     print(f"Source: {SQLITE_PATH}")
-    print(f"  {len(v1_tables)} v1 tables -> {V1_SCHEMA}")
-    print(f"  {len(v2_tables)} v2 tables -> {V2_SCHEMA}")
+    print(f"  {len(all_tables)} tables -> {TARGET_SCHEMA}")
     print(f"Target: {SERVER_HOSTNAME} catalog={CATALOG}")
-    print(f"Staging: {local_root} -> /Volumes/{CATALOG}/{STAGE_SCHEMA}/{STAGE_VOLUME}/{run_dir}\n")
+    print(f"Staging: /Volumes/{CATALOG}/{STAGE_SCHEMA}/{STAGE_VOLUME}\n")
 
     conn = dbsql.connect(
         server_hostname=SERVER_HOSTNAME,
@@ -350,7 +291,8 @@ def main() -> None:
     uploaded_paths: list[str] = []
     mismatches: list[tuple[str, int, int]] = []
     total_rows = 0
-    view_created = False
+    run_dir = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+    local_root = Path(tempfile.mkdtemp(prefix="f1-stage-"))
 
     try:
         with conn.cursor() as dst_cur:
@@ -358,31 +300,17 @@ def main() -> None:
             create_schemas(dst_cur)
             volume_root = create_volume(dst_cur)
 
-            for label, schema, tables in (
-                ("v1", V1_SCHEMA, v1_tables),
-                ("v2", V2_SCHEMA, v2_tables),
-            ):
-                print(f"\n[{label}] -> {schema}")
-                for t in tables:
-                    expected, loaded, paths = migrate_table(
-                        src, src_cur, dst_cur, schema, t, volume_root, run_dir, local_root
-                    )
-                    uploaded_paths.extend(paths)
-                    total_rows += loaded
-                    note = "" if expected == loaded else "   <-- MISMATCH"
-                    if expected != loaded:
-                        mismatches.append((f"{schema}.{t}", expected, loaded))
-                    print(f"  ok {t:<34} {loaded:>9} rows{note}")
-
-            print("\n[views]")
-            view_created = migrate_view(dst_cur, V2_SCHEMA, VIEW_NAME, table_map)
-
-            print("\n[verify]")
-            if view_created:
-                dst_cur.execute(f"SELECT COUNT(*) FROM {qualified(V2_SCHEMA, VIEW_NAME)}")
-                print(f"  {V2_SCHEMA}.{VIEW_NAME:<32} {dst_cur.fetchone()[0]:>9}")
-            else:
-                print(f"  - {V2_SCHEMA}.{VIEW_NAME:<32} (not created)")
+            print(f"\n[tables] -> {TARGET_SCHEMA}")
+            for t in all_tables:
+                expected, loaded, paths = migrate_table(
+                    src, src_cur, dst_cur, t, volume_root, run_dir, local_root
+                )
+                uploaded_paths.extend(paths)
+                total_rows += loaded
+                note = "" if expected == loaded else "   <-- MISMATCH"
+                if expected != loaded:
+                    mismatches.append((f"{TARGET_SCHEMA}.{t}", expected, loaded))
+                print(f"  ok {t:<34} {loaded:>9} rows{note}")
     finally:
         conn.close()
         src.close()
@@ -395,9 +323,14 @@ def main() -> None:
         delete_file(f"{p.rsplit('/', 1)[0]}")  # per-table directory
     print(f"  removed {removed}/{len(uploaded_paths)} staged file(s)")
 
-    # Exit with error only on row-count mismatches, not on missing view
+    # Exit with error only on row-count mismatches
     if mismatches:
+        print("\nRow count mismatches detected:")
+        for name, exp, got in mismatches:
+            print(f"  {name}: expected {exp}, got {got}")
         sys.exit(1)
+    
+    print(f"\nTotal rows published: {total_rows:,}")
     print("\nDone.")
 
 if __name__ == "__main__":

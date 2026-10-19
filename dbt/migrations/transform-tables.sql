@@ -10,31 +10,31 @@ ATTACH DATABASE 'jolpica.db' AS jolpica;
 -- ============================================================
 -- PART 1: DROP EXISTING VIEW IF EXISTS
 -- ============================================================
-DROP VIEW IF EXISTS f1summary;
+DROP VIEW  IF EXISTS main.f1summary;
 
 -- ============================================================
--- PART 2: DROP EXISTING v2_ TABLES (for idempotency)
+-- PART 2: DROP EXISTING OBJECTS (main schema ONLY)
 -- ============================================================
-DROP TABLE IF EXISTS season;
-DROP TABLE IF EXISTS circuit;
-DROP TABLE IF EXISTS driver;
-DROP TABLE IF EXISTS constructor;
-DROP TABLE IF EXISTS engine;
-DROP TABLE IF EXISTS driver_season;
-DROP TABLE IF EXISTS constructor_season;
-DROP TABLE IF EXISTS constructor_engine;
-DROP TABLE IF EXISTS round;
-DROP TABLE IF EXISTS constructor_driver;
-DROP TABLE IF EXISTS round_entry;
-DROP TABLE IF EXISTS session;
-DROP TABLE IF EXISTS session_entry;
-DROP TABLE IF EXISTS driver_championship;
-DROP TABLE IF EXISTS constructor_championship;
-DROP TABLE IF EXISTS lap;
-DROP TABLE IF EXISTS pit_stop;
-DROP TABLE IF EXISTS penalty;
-DROP TABLE IF EXISTS countries;
-DROP TABLE IF EXISTS constructor_base;
+DROP TABLE IF EXISTS main.season;
+DROP TABLE IF EXISTS main.circuit;
+DROP TABLE IF EXISTS main.driver;
+DROP TABLE IF EXISTS main.constructor;
+DROP TABLE IF EXISTS main.engine;
+DROP TABLE IF EXISTS main.driver_season;
+DROP TABLE IF EXISTS main.constructor_season;
+DROP TABLE IF EXISTS main.constructor_engine;
+DROP TABLE IF EXISTS main.round;
+DROP TABLE IF EXISTS main.constructor_driver;
+DROP TABLE IF EXISTS main.round_entry;
+DROP TABLE IF EXISTS main.session;
+DROP TABLE IF EXISTS main.session_entry;
+DROP TABLE IF EXISTS main.driver_championship;
+DROP TABLE IF EXISTS main.constructor_championship;
+DROP TABLE IF EXISTS main.lap;
+DROP TABLE IF EXISTS main.pit_stop;
+DROP TABLE IF EXISTS main.penalty;
+DROP TABLE IF EXISTS main.countries;
+DROP TABLE IF EXISTS main.constructor_base;
 
 -- ============================================================
 -- PART 3: CREATE DIMENSION TABLES

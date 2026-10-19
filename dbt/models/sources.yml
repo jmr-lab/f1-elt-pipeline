@@ -624,6 +624,25 @@ sources:
             description: "Penalty time"
 
       # ============================================================
+      # VIEWS
+      # ============================================================
+
+      - name: f1summary
+        description: >
+          Denormalised race results view joining session entries to drivers,
+          constructors, seasons and championship points. Created by
+          transform-tables.sql, not by dbt.
+        columns:
+          - name: resultId
+            description: "Session entry identifier"
+          - name: positionOrder
+            description: "Finishing position"
+          - name: status
+            description: "Derived finishing status (Finished, Lapsed, Abandoned, …)"
+          - name: year
+            description: "Season year"
+
+      # ============================================================
       # LOOKUP TABLES
       # ============================================================
 

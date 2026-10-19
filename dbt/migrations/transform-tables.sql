@@ -33,6 +33,7 @@ DROP TABLE IF EXISTS lap;
 DROP TABLE IF EXISTS pit_stop;
 DROP TABLE IF EXISTS penalty;
 DROP TABLE IF EXISTS countries;
+DROP TABLE IF EXISTS constructor_base;
 
 -- ============================================================
 -- PART 3: CREATE DIMENSION TABLES
@@ -417,7 +418,7 @@ FROM jolpica._countries_lookup;
 
 -- Migrate Base Team → constructor_base (renamed for consistency)
 INSERT INTO constructor_base (id, name, api_id)
-SELECT id, name, api_id FROM jolpica.baseteam;
+SELECT id, name, api_id FROM jolpica.base_team;
 
 -- ============================================================
 -- PART 10: CREATE YEAR-GRAIN ATTRIBUTE TABLES FROM EXISTING DATA

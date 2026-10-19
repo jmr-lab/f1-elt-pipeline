@@ -67,20 +67,23 @@ jobs:
           name: extracted-data
           path: output
       
-      - name: Build database
+      - name: Build jolpica.db (raw tables only)
         run: python src/02-load.py
       
-      - name: Upload database artifact
+      - name: Upload jolpica.db
         uses: actions/upload-artifact@v4
         with:
-          name: f1-database
-          path: dist/formula1.db
+          name: jolpica-db
+          path: dist/jolpica.db
           retention-days: 7
 
       - name: Verify outputs
         run: |
           echo "=== DB folder contents ==="
           ls -la dist/
+          echo ""
+          echo "=== Table count ==="
+          sqlite3 dist/jolpica.db "SELECT COUNT(*) FROM sqlite_master WHERE type='table';"
 
   transform:
     runs-on: ubuntu-latest
@@ -102,112 +105,76 @@ jobs:
         run: |
           pip install "dbt-core==1.9.1" "dbt-sqlite==1.9.1" dbt-docs
       
-      - name: Download database artifact
+      - name: Download jolpica.db
         uses: actions/download-artifact@v4
         with:
-          name: f1-database
+          name: jolpica-db
           path: dist
       
-      - name: Run transform-tables SQL
+      - name: Build formula1.db (transform)
+        working-directory: dist
         run: |
-          sqlite3 dist/formula1.db < dbt/migrations/transform-tables.sql
+          # Create empty formula1.db
+          sqlite3 formula1.db </dev/null
+          # Run transform SQL (reads from jolpica.db, writes to formula1.db)
+          sqlite3 formula1.db < ../dbt/migrations/transform-tables.sql
       
-      # --- ADDED: Upload the transformed database so downstream jobs can access it ---
-      - name: Upload transformed database
+      - name: Upload formula1.db
         uses: actions/upload-artifact@v4
         with:
-          name: f1-database-transformed
+          name: formula1-db
           path: dist/formula1.db
           retention-days: 7
-      # -------------------------------------------------------------------------
       
-      - name: Verify Both Table Sets Exist
+      - name: Verify formula1.db contents
+        working-directory: dist
         run: |
-          echo "Old tables (for other project):"
-          sqlite3 dist/formula1.db "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'v2_%' ORDER BY name;"
+          echo "=== Tables in formula1.db ==="
+          sqlite3 formula1.db "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"
           echo ""
-          echo "New v2_ tables (for dbt):"
-          sqlite3 dist/formula1.db "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'v2_%' ORDER BY name;"
+          echo "=== Views in formula1.db ==="
+          sqlite3 formula1.db "SELECT name FROM sqlite_master WHERE type='view';"
+          echo ""
+          echo "=== Row counts ==="
+          sqlite3 formula1.db "SELECT 'season', COUNT(*) FROM season UNION ALL SELECT 'driver', COUNT(*) FROM driver UNION ALL SELECT 'lap', COUNT(*) FROM lap;"
       
       - name: Initialize dbt profile
         run: |
           mkdir -p ~/.dbt
-          printf '%s\n' \
-            'sqlite:' \
-            '  target: dev' \
-            '  outputs:' \
-            '    dev:' \
-            '      type: sqlite' \
-            '      threads: 1' \
-            "      database: 'database'" \
-            "      schema: 'main'" \
-            '      schemas_and_paths:' \
-            "        main: ${GITHUB_WORKSPACE}/dist/formula1.db" \
-            "      schema_directory: ${GITHUB_WORKSPACE}/dist" \
-            > ~/.dbt/profiles.yml
+          cat > ~/.dbt/profiles.yml <<EOF
+          sqlite:
+            target: dev
+            outputs:
+              dev:
+                type: sqlite
+                database: 'database'
+                schema: 'main'
+                schemas_and_paths:
+                  main: ${GITHUB_WORKSPACE}/dist/formula1.db
+          EOF
       
       - name: Run dbt debug
         working-directory: dbt
         run: dbt debug
       
-      - name: Run dbt
+      - name: Run dbt models
         working-directory: dbt
         run: dbt run
+      
+      - name: Run dbt tests
+        working-directory: dbt
+        run: dbt test
       
       - name: Generate dbt documentation
         working-directory: dbt
         run: dbt docs generate
       
-      - name: Run dbt tests (optional)
-        working-directory: dbt
-        run: dbt test
-      
-      - name: Verify both table sets exist
-        run: |
-          echo "=== Original tables (preserved for analysis) ==="
-          sqlite3 dist/formula1.db "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'v2_%' ORDER BY name;"
-    
-          echo ""
-          echo "=== New v2_ tables (for dbt) ==="
-          sqlite3 dist/formula1.db "SELECT name FROM sqlite_master WHERE type='table' AND name LIKE 'v2_%' ORDER BY name;"
-    
-          echo ""
-          echo "=== f1summary view sample ==="
-          sqlite3 dist/formula1.db "SELECT COUNT(*) as total FROM f1summary;"
-
       - name: Upload dbt docs artifact
         uses: actions/upload-artifact@v4
         with:
           name: dbt-docs
           path: dbt/target/
           retention-days: 30
-      
-      - name: Commit and push database
-        run: |
-          git config user.name 'github-actions[bot]'
-          git config user.email 'github-actions[bot]@users.noreply.github.com'
-          
-          # Pull latest changes
-          git pull --rebase origin main || true
-          
-          # Force-accept our newly generated database file
-          if [ -f dist/formula1.db ]; then
-            echo "Force-accepting local database file..."
-            git add dist/formula1.db
-            git checkout HEAD -- dist/formula1.db 2>/dev/null || true
-            git add dist/formula1.db
-          fi
-          
-          # Check for staged changes
-          if git diff --cached --quiet; then
-            echo "No changes to commit"
-          else
-            git status --short
-            git commit -m "[data-update] Refresh F1 database [skip ci]"
-          fi
-          
-          # Push
-          git push
       
       - name: Create release
         uses: ncipollo/release-action@v1
@@ -259,9 +226,9 @@ jobs:
     name: Publish to Databricks
     needs: [transform]
     runs-on: ubuntu-latest
-    # Databricks being unavailable must not fail the pipeline —
-    # the SQLite file remains the source of truth.
-    continue-on-error: true
+    # Publish should now be required for success
+    continue-on-error: false
+    
     steps:
       - uses: actions/checkout@v4
 
@@ -269,22 +236,23 @@ jobs:
         with:
           python-version: '3.12'
 
-      - name: Download transformed database
+      - name: Download jolpica.db
         uses: actions/download-artifact@v4
         with:
-          name: f1-database-transformed
+          name: jolpica-db
           path: dist/
 
       - name: Install dependencies
         run: pip install "databricks-sql-connector>=3.0" pandas pyarrow requests
 
-      - name: Publish to Databricks
+      - name: Publish jolpica.db to Databricks
         timeout-minutes: 30
         env:
-          SQLITE_PATH: dist/formula1.db
+          SQLITE_PATH: dist/jolpica.db
           DATABRICKS_SERVER_HOSTNAME: ${{ secrets.DATABRICKS_SERVER_HOSTNAME }}
           DATABRICKS_HTTP_PATH: ${{ secrets.DATABRICKS_HTTP_PATH }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
           DATABRICKS_CATALOG: ${{ vars.DATABRICKS_CATALOG }}
+          JOLPICA_SCHEMA: jolpica
         run: python src/04-publish-databricks.py
-        
+  

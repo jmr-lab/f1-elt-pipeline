@@ -87,6 +87,7 @@ jobs:
         with:
           name: jolpica-db
           path: dist/jolpica.db
+          if-no-files-found: error
           retention-days: 7
 
       - name: Verify outputs

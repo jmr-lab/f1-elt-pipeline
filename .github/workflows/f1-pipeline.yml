@@ -114,8 +114,8 @@ jobs:
       - name: Build formula1.db (transform)
         working-directory: dist
         run: |
-          # Create empty formula1.db
-          sqlite3 formula1.db </dev/null
+          # Delete formula1.db
+          rm -f formula1.db
           # Run transform SQL (reads from jolpica.db, writes to formula1.db)
           sqlite3 formula1.db < ../dbt/migrations/transform-tables.sql
       

@@ -1,20 +1,10 @@
 -- ============================================================
--- F1 SCHEMA MIGRATION TO NEW MODEL (WITH PREFIX)
--- Keeps OLD tables intact, creates NEW v2_ prefixed tables
---
--- ALL FIXES APPLIED:
---   1. driver: source uses 'nationality', mapped to 'birth_country'
---   2. v2_round.number: NULL fallback using ROW_NUMBER() per season
---   3. v2_driver_championship: derive season_id from year; skip NULL round_id
---   4. v2_constructor_championship: derive season_id from year; skip NULL round_id
---   5. v2_lap.number: NULL fallback using ROW_NUMBER() per session_entry
---   6. _countries_lookup: source only has (country_code, country);
---      use rowid as PK, NULL for iso_alpha3/continent
---   7. v2_driver_season.nationality: COALESCE to 'Unknown'
---   8. v2_constructor_season.nationality: COALESCE to 'Unknown'
---   9. v2_constructor_engine: resolve season_id via year join (was using
---      calendar years as season IDs, breaking the FK relationship test)
+-- TRANSFORM: jolpica.db → formula1.db
+-- Reads from attached jolpica.db, writes to main database (formula1.db)
 -- ============================================================
+
+-- ATTACH the raw source database
+ATTACH DATABASE 'jolpica.db' AS jolpica;
 
 -- ============================================================
 -- PART 1: DROP EXISTING VIEW IF EXISTS
@@ -22,17 +12,40 @@
 DROP VIEW IF EXISTS f1summary;
 
 -- ============================================================
--- PART 2: CREATE NEW DIMENSION TABLES (WITH v2_ PREFIX)
+-- PART 2: DROP EXISTING v2_ TABLES (for idempotency)
+-- ============================================================
+DROP TABLE IF EXISTS season;
+DROP TABLE IF EXISTS circuit;
+DROP TABLE IF EXISTS driver;
+DROP TABLE IF EXISTS constructor;
+DROP TABLE IF EXISTS engine;
+DROP TABLE IF EXISTS driver_season;
+DROP TABLE IF EXISTS constructor_season;
+DROP TABLE IF EXISTS constructor_engine;
+DROP TABLE IF EXISTS round;
+DROP TABLE IF EXISTS constructor_driver;
+DROP TABLE IF EXISTS round_entry;
+DROP TABLE IF EXISTS session;
+DROP TABLE IF EXISTS session_entry;
+DROP TABLE IF EXISTS driver_championship;
+DROP TABLE IF EXISTS constructor_championship;
+DROP TABLE IF EXISTS lap;
+DROP TABLE IF EXISTS pit_stop;
+DROP TABLE IF EXISTS penalty;
+DROP TABLE IF EXISTS countries;
+
+-- ============================================================
+-- PART 3: CREATE DIMENSION TABLES
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS v2_season (
+CREATE TABLE IF NOT EXISTS season (
     id INTEGER PRIMARY KEY,
     year INTEGER UNIQUE NOT NULL,
     championship_system_id INTEGER,
     wikipedia TEXT
 );
 
-CREATE TABLE IF NOT EXISTS v2_circuit (
+CREATE TABLE IF NOT EXISTS circuit (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL,
     reference TEXT,
@@ -45,7 +58,7 @@ CREATE TABLE IF NOT EXISTS v2_circuit (
     wikipedia TEXT
 );
 
-CREATE TABLE IF NOT EXISTS v2_driver (
+CREATE TABLE IF NOT EXISTS driver (
     id INTEGER PRIMARY KEY,
     reference TEXT UNIQUE NOT NULL,
     abbreviation TEXT,
@@ -57,16 +70,16 @@ CREATE TABLE IF NOT EXISTS v2_driver (
     wikipedia TEXT
 );
 
-CREATE TABLE IF NOT EXISTS v2_constructor (
+CREATE TABLE IF NOT EXISTS constructor (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL,
     reference TEXT UNIQUE NOT NULL,
-    base_constructor_id INTEGER,
+    constructor_base_id INTEGER,
     primary_color TEXT,
     wikipedia TEXT
 );
 
-CREATE TABLE IF NOT EXISTS v2_engine (
+CREATE TABLE IF NOT EXISTS engine (
     id INTEGER PRIMARY KEY,
     name TEXT NOT NULL,
     reference TEXT UNIQUE NOT NULL,
@@ -76,47 +89,47 @@ CREATE TABLE IF NOT EXISTS v2_engine (
 );
 
 -- ============================================================
--- PART 3: CREATE YEAR-GRAIN ATTRIBUTE HISTORY TABLES
+-- PART 4: CREATE YEAR-GRAIN ATTRIBUTE HISTORY TABLES
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS v2_driver_season (
+CREATE TABLE IF NOT EXISTS driver_season (
     driver_id INTEGER NOT NULL,
     season_id INTEGER NOT NULL,
     nationality TEXT NOT NULL,
     country_code TEXT,
     PRIMARY KEY (driver_id, season_id),
-    FOREIGN KEY (driver_id) REFERENCES v2_driver(id),
-    FOREIGN KEY (season_id) REFERENCES v2_season(id)
+    FOREIGN KEY (driver_id) REFERENCES driver(id),
+    FOREIGN KEY (season_id) REFERENCES season(id)
 );
 
-CREATE TABLE IF NOT EXISTS v2_constructor_season (
+CREATE TABLE IF NOT EXISTS constructor_season (
     constructor_id INTEGER NOT NULL,
     season_id INTEGER NOT NULL,
     name TEXT NOT NULL,
     nationality TEXT NOT NULL,
     country_code TEXT,
-    base_constructor_id INTEGER,
+    constructor_base_id INTEGER,
     PRIMARY KEY (constructor_id, season_id),
-    FOREIGN KEY (constructor_id) REFERENCES v2_constructor(id),
-    FOREIGN KEY (season_id) REFERENCES v2_season(id)
+    FOREIGN KEY (constructor_id) REFERENCES constructor(id),
+    FOREIGN KEY (season_id) REFERENCES season(id)
 );
 
-CREATE TABLE IF NOT EXISTS v2_constructor_engine (
+CREATE TABLE IF NOT EXISTS constructor_engine (
     constructor_id INTEGER NOT NULL,
     season_id INTEGER NOT NULL,
     engine_id INTEGER NOT NULL,
     engine_ref_override TEXT,
     PRIMARY KEY (constructor_id, season_id),
-    FOREIGN KEY (constructor_id) REFERENCES v2_constructor(id),
-    FOREIGN KEY (season_id) REFERENCES v2_season(id),
-    FOREIGN KEY (engine_id) REFERENCES v2_engine(id)
+    FOREIGN KEY (constructor_id) REFERENCES constructor(id),
+    FOREIGN KEY (season_id) REFERENCES season(id),
+    FOREIGN KEY (engine_id) REFERENCES engine(id)
 );
 
 -- ============================================================
--- PART 4: CREATE EVENT & RESULTS TABLES
+-- PART 5: CREATE EVENT & RESULTS TABLES
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS v2_round (
+CREATE TABLE IF NOT EXISTS round (
     id INTEGER PRIMARY KEY,
     season_id INTEGER NOT NULL,
     circuit_id INTEGER NOT NULL,
@@ -125,33 +138,33 @@ CREATE TABLE IF NOT EXISTS v2_round (
     date TEXT,
     is_cancelled INTEGER DEFAULT 0,
     wikipedia TEXT,
-    FOREIGN KEY (season_id) REFERENCES v2_season(id),
-    FOREIGN KEY (circuit_id) REFERENCES v2_circuit(id),
+    FOREIGN KEY (season_id) REFERENCES season(id),
+    FOREIGN KEY (circuit_id) REFERENCES circuit(id),
     UNIQUE(season_id, number)
 );
 
-CREATE TABLE IF NOT EXISTS v2_constructor_driver (
+CREATE TABLE IF NOT EXISTS constructor_driver (
     id INTEGER PRIMARY KEY,
     season_id INTEGER NOT NULL,
     constructor_id INTEGER NOT NULL,
     driver_id INTEGER NOT NULL,
     role TEXT,
-    FOREIGN KEY (season_id) REFERENCES v2_season(id),
-    FOREIGN KEY (constructor_id) REFERENCES v2_constructor(id),
-    FOREIGN KEY (driver_id) REFERENCES v2_driver(id),
+    FOREIGN KEY (season_id) REFERENCES season(id),
+    FOREIGN KEY (constructor_id) REFERENCES constructor(id),
+    FOREIGN KEY (driver_id) REFERENCES driver(id),
     UNIQUE(season_id, constructor_id, driver_id, role)
 );
 
-CREATE TABLE IF NOT EXISTS v2_round_entry (
+CREATE TABLE IF NOT EXISTS round_entry (
     id INTEGER PRIMARY KEY,
     round_id INTEGER NOT NULL,
     constructor_driver_id INTEGER NOT NULL,
     car_number INTEGER,
-    FOREIGN KEY (round_id) REFERENCES v2_round(id),
-    FOREIGN KEY (constructor_driver_id) REFERENCES v2_constructor_driver(id)
+    FOREIGN KEY (round_id) REFERENCES round(id),
+    FOREIGN KEY (constructor_driver_id) REFERENCES constructor_driver(id)
 );
 
-CREATE TABLE IF NOT EXISTS v2_session (
+CREATE TABLE IF NOT EXISTS session (
     id INTEGER PRIMARY KEY,
     round_id INTEGER NOT NULL,
     type TEXT NOT NULL,
@@ -162,10 +175,10 @@ CREATE TABLE IF NOT EXISTS v2_session (
     point_system_id INTEGER,
     is_cancelled INTEGER DEFAULT 0,
     has_time_data INTEGER,
-    FOREIGN KEY (round_id) REFERENCES v2_round(id)
+    FOREIGN KEY (round_id) REFERENCES round(id)
 );
 
-CREATE TABLE IF NOT EXISTS v2_session_entry (
+CREATE TABLE IF NOT EXISTS session_entry (
     id INTEGER PRIMARY KEY,
     session_id INTEGER NOT NULL,
     round_entry_id INTEGER NOT NULL,
@@ -179,15 +192,15 @@ CREATE TABLE IF NOT EXISTS v2_session_entry (
     status TEXT,
     is_classified INTEGER,
     is_eligible_for_points INTEGER,
-    FOREIGN KEY (session_id) REFERENCES v2_session(id),
-    FOREIGN KEY (round_entry_id) REFERENCES v2_round_entry(id)
+    FOREIGN KEY (session_id) REFERENCES session(id),
+    FOREIGN KEY (round_entry_id) REFERENCES round_entry(id)
 );
 
 -- ============================================================
--- PART 5: CHAMPIONSHIP TRACKING TABLES
+-- PART 6: CREATE CHAMPIONSHIP TRACKING TABLES
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS v2_driver_championship (
+CREATE TABLE IF NOT EXISTS driver_championship (
     id INTEGER PRIMARY KEY,
     season_id INTEGER NOT NULL,
     year INTEGER NOT NULL,
@@ -202,13 +215,13 @@ CREATE TABLE IF NOT EXISTS v2_driver_championship (
     session_id INTEGER,
     session_number INTEGER,
     round_number INTEGER,
-    FOREIGN KEY (season_id) REFERENCES v2_season(id),
-    FOREIGN KEY (driver_id) REFERENCES v2_driver(id),
-    FOREIGN KEY (round_id) REFERENCES v2_round(id),
+    FOREIGN KEY (season_id) REFERENCES season(id),
+    FOREIGN KEY (driver_id) REFERENCES driver(id),
+    FOREIGN KEY (round_id) REFERENCES round(id),
     UNIQUE(season_id, round_id, driver_id)
 );
 
-CREATE TABLE IF NOT EXISTS v2_constructor_championship (
+CREATE TABLE IF NOT EXISTS constructor_championship (
     id INTEGER PRIMARY KEY,
     season_id INTEGER NOT NULL,
     year INTEGER NOT NULL,
@@ -223,17 +236,17 @@ CREATE TABLE IF NOT EXISTS v2_constructor_championship (
     session_id INTEGER,
     session_number INTEGER,
     round_number INTEGER,
-    FOREIGN KEY (season_id) REFERENCES v2_season(id),
-    FOREIGN KEY (constructor_id) REFERENCES v2_constructor(id),
-    FOREIGN KEY (round_id) REFERENCES v2_round(id),
+    FOREIGN KEY (season_id) REFERENCES season(id),
+    FOREIGN KEY (constructor_id) REFERENCES constructor(id),
+    FOREIGN KEY (round_id) REFERENCES round(id),
     UNIQUE(season_id, round_id, constructor_id)
 );
 
 -- ============================================================
--- PART 6: DETAIL DATA TABLES
+-- PART 7: CREATE DETAIL DATA TABLES
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS v2_lap (
+CREATE TABLE IF NOT EXISTS lap (
     id INTEGER PRIMARY KEY,
     session_entry_id INTEGER NOT NULL,
     number INTEGER NOT NULL,
@@ -242,21 +255,21 @@ CREATE TABLE IF NOT EXISTS v2_lap (
     average_speed TEXT,
     is_fastest_lap INTEGER,
     is_deleted INTEGER DEFAULT 0,
-    FOREIGN KEY (session_entry_id) REFERENCES v2_session_entry(id)
+    FOREIGN KEY (session_entry_id) REFERENCES session_entry(id)
 );
 
-CREATE TABLE IF NOT EXISTS v2_pit_stop (
+CREATE TABLE IF NOT EXISTS pit_stop (
     id INTEGER PRIMARY KEY,
     session_entry_id INTEGER NOT NULL,
     lap_id INTEGER,
     number INTEGER,
     duration TEXT,
     local_timestamp TEXT,
-    FOREIGN KEY (session_entry_id) REFERENCES v2_session_entry(id),
-    FOREIGN KEY (lap_id) REFERENCES v2_lap(id)
+    FOREIGN KEY (session_entry_id) REFERENCES session_entry(id),
+    FOREIGN KEY (lap_id) REFERENCES lap(id)
 );
 
-CREATE TABLE IF NOT EXISTS v2_penalty (
+CREATE TABLE IF NOT EXISTS penalty (
     id INTEGER PRIMARY KEY,
     earned_session_entry_id INTEGER,
     served_session_entry_id INTEGER,
@@ -264,15 +277,15 @@ CREATE TABLE IF NOT EXISTS v2_penalty (
     license_points INTEGER,
     is_time_served_in_pit INTEGER,
     time TEXT,
-    FOREIGN KEY (earned_session_entry_id) REFERENCES v2_session_entry(id),
-    FOREIGN KEY (served_session_entry_id) REFERENCES v2_session_entry(id)
+    FOREIGN KEY (earned_session_entry_id) REFERENCES session_entry(id),
+    FOREIGN KEY (served_session_entry_id) REFERENCES session_entry(id)
 );
 
 -- ============================================================
--- PART 7: LOOKUP TABLE
+-- PART 8: CREATE LOOKUP TABLE
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS v2_countries (
+CREATE TABLE IF NOT EXISTS countries (
     id INTEGER PRIMARY KEY,
     country_code TEXT UNIQUE NOT NULL,
     country TEXT,
@@ -281,149 +294,149 @@ CREATE TABLE IF NOT EXISTS v2_countries (
 );
 
 -- ============================================================
--- PART 8: COPY DATA FROM OLD TO NEW TABLES (KEEPING BOTH SETS)
+-- PART 9: COPY DATA FROM JOLPICA (ATTACHED DATABASE)
 -- ============================================================
 
 -- Migrate Season (no api_id)
-INSERT INTO v2_season (id, year, championship_system_id, wikipedia)
-SELECT id, year, championship_system_id, wikipedia FROM season;
+INSERT INTO season (id, year, championship_system_id, wikipedia)
+SELECT id, year, championship_system_id, wikipedia FROM jolpica.season;
 
 -- Migrate Circuit (no api_id)
-INSERT INTO v2_circuit (id, name, reference, locality, country, country_code,
+INSERT INTO circuit (id, name, reference, locality, country, country_code,
                         latitude, longitude, altitude, wikipedia)
 SELECT id, name, reference, locality, country, country_code,
-       latitude, longitude, altitude, wikipedia FROM circuit;
+       latitude, longitude, altitude, wikipedia FROM jolpica.circuit;
 
--- FIX 1: Driver — source table has 'nationality', not 'country'. Map to birth_country.
-INSERT INTO v2_driver (id, reference, abbreviation, forename, surname,
+-- Driver — source table has 'nationality', not 'country'. Map to birth_country.
+INSERT INTO driver (id, reference, abbreviation, forename, surname,
                        permanent_car_number, date_of_birth, birth_country, wikipedia)
 SELECT id, reference, abbreviation, forename, surname,
-       permanent_car_number, date_of_birth, nationality, wikipedia FROM driver;
+       permanent_car_number, date_of_birth, nationality, wikipedia FROM jolpica.driver;
 
 -- Migrate Constructor (renamed from team, no api_id)
-INSERT INTO v2_constructor (id, name, reference, base_constructor_id, primary_color, wikipedia)
-SELECT id, name, reference, base_team_id, primary_color, wikipedia FROM team;
+INSERT INTO constructor (id, name, reference, constructor_base_id, primary_color, wikipedia)
+SELECT id, name, reference, base_team_id, primary_color, wikipedia FROM jolpica.team;
 
--- FIX 2: Round — NULL 'number' fallback using ROW_NUMBER() per season ordered by date.
-INSERT INTO v2_round (id, season_id, circuit_id, number, name, date, is_cancelled, wikipedia)
+-- Round — NULL 'number' fallback using ROW_NUMBER() per season ordered by date.
+INSERT INTO round (id, season_id, circuit_id, number, name, date, is_cancelled, wikipedia)
 SELECT r.id, r.season_id, r.circuit_id,
        CASE
          WHEN r.number IS NOT NULL THEN r.number
-         ELSE (SELECT COALESCE(MAX(r2.number), 0) FROM round r2 WHERE r2.season_id = r.season_id)
+         ELSE (SELECT COALESCE(MAX(r2.number), 0) FROM jolpica.round r2 WHERE r2.season_id = r.season_id)
               + ROW_NUMBER() OVER (PARTITION BY r.season_id ORDER BY r.date, r.id)
        END AS number,
        COALESCE(r.name, 'Unknown round'),
        r.date,
        COALESCE(r.is_cancelled, 0),
        r.wikipedia
-FROM round r;
+FROM jolpica.round r;
 
 -- Migrate Constructor Driver (renamed from team_driver, no api_id)
-INSERT INTO v2_constructor_driver (id, season_id, constructor_id, driver_id, role)
-SELECT id, season_id, team_id, driver_id, role FROM team_driver;
+INSERT INTO constructor_driver (id, season_id, constructor_id, driver_id, role)
+SELECT id, season_id, team_id, driver_id, role FROM jolpica.team_driver;
 
 -- Migrate Round Entry (rename FK, no api_id)
-INSERT INTO v2_round_entry (id, round_id, constructor_driver_id, car_number)
-SELECT id, round_id, team_driver_id, car_number FROM roundentry;
+INSERT INTO round_entry (id, round_id, constructor_driver_id, car_number)
+SELECT id, round_id, team_driver_id, car_number FROM jolpica.roundentry;
 
 -- Migrate Session (no api_id)
-INSERT INTO v2_session (id, round_id, type, number, timestamp, timezone,
+INSERT INTO session (id, round_id, type, number, timestamp, timezone,
                         scheduled_laps, point_system_id, is_cancelled, has_time_data)
 SELECT id, round_id, type, number, timestamp, timezone,
-       scheduled_laps, point_system_id, is_cancelled, has_time_data FROM session;
+       scheduled_laps, point_system_id, is_cancelled, has_time_data FROM jolpica.session;
 
 -- Migrate Session Entry (no api_id)
-INSERT INTO v2_session_entry (id, session_id, round_entry_id, grid, position,
+INSERT INTO session_entry (id, session_id, round_entry_id, grid, position,
                               points, laps_completed, fastest_lap_rank, time,
                               detail, status, is_classified, is_eligible_for_points)
 SELECT id, session_id, round_entry_id, grid, position, points,
        laps_completed, fastest_lap_rank, time, detail, status,
-       is_classified, is_eligible_for_points FROM session_entry;
+       is_classified, is_eligible_for_points FROM jolpica.session_entry;
 
--- FIX 3: Driver Championship — derive season_id from year when NULL; skip NULL round_id.
-INSERT INTO v2_driver_championship (id, season_id, year, driver_id, round_id, position,
+-- Driver Championship — derive season_id from year when NULL; skip NULL round_id.
+INSERT INTO driver_championship (id, season_id, year, driver_id, round_id, position,
                                      points, win_count, highest_finish, is_eligible,
                                      adjustment_type, session_id, session_number, round_number)
 SELECT dc.id,
-       COALESCE(dc.season_id, (SELECT s.id FROM season s WHERE s.year = dc.year)),
+       COALESCE(dc.season_id, (SELECT s.id FROM jolpica.season s WHERE s.year = dc.year)),
        dc.year, dc.driver_id, dc.round_id, dc.position, dc.points,
        dc.win_count, dc.highest_finish, dc.is_eligible, dc.adjustment_type,
        dc.session_id, dc.session_number, dc.round_number
-FROM driver_championship dc
+FROM jolpica.driver_championship dc
 WHERE dc.round_id IS NOT NULL
-  AND COALESCE(dc.season_id, (SELECT s.id FROM season s WHERE s.year = dc.year)) IS NOT NULL;
+  AND COALESCE(dc.season_id, (SELECT s.id FROM jolpica.season s WHERE s.year = dc.year)) IS NOT NULL;
 
--- FIX 4: Constructor Championship — derive season_id from year when NULL; skip NULL round_id.
-INSERT INTO v2_constructor_championship (id, season_id, year, constructor_id, round_id, position,
+-- Constructor Championship — derive season_id from year when NULL; skip NULL round_id.
+INSERT INTO constructor_championship (id, season_id, year, constructor_id, round_id, position,
                                           points, win_count, highest_finish, is_eligible,
                                           adjustment_type, session_id, session_number, round_number)
 SELECT tc.id,
-       COALESCE(tc.season_id, (SELECT s.id FROM season s WHERE s.year = tc.year)),
+       COALESCE(tc.season_id, (SELECT s.id FROM jolpica.season s WHERE s.year = tc.year)),
        tc.year, tc.team_id, tc.round_id, tc.position, tc.points,
        tc.win_count, tc.highest_finish, tc.is_eligible, tc.adjustment_type,
        tc.session_id, tc.session_number, tc.round_number
-FROM team_championship tc
+FROM jolpica.team_championship tc
 WHERE tc.round_id IS NOT NULL
-  AND COALESCE(tc.season_id, (SELECT s.id FROM season s WHERE s.year = tc.year)) IS NOT NULL;
+  AND COALESCE(tc.season_id, (SELECT s.id FROM jolpica.season s WHERE s.year = tc.year)) IS NOT NULL;
 
--- FIX 5: Lap — NULL 'number' fallback using ROW_NUMBER() per session_entry ordered by id.
-INSERT INTO v2_lap (id, session_entry_id, number, position, time, average_speed,
+-- Lap — NULL 'number' fallback using ROW_NUMBER() per session_entry ordered by id.
+INSERT INTO lap (id, session_entry_id, number, position, time, average_speed,
                     is_fastest_lap, is_deleted)
 SELECT l.id, l.session_entry_id,
        CASE
          WHEN l.number IS NOT NULL THEN l.number
-         ELSE (SELECT COALESCE(MAX(l2.number), 0) FROM lap l2 WHERE l2.session_entry_id = l.session_entry_id)
+         ELSE (SELECT COALESCE(MAX(l2.number), 0) FROM jolpica.lap l2 WHERE l2.session_entry_id = l.session_entry_id)
               + ROW_NUMBER() OVER (PARTITION BY l.session_entry_id ORDER BY l.id)
        END AS number,
        l.position, l.time, l.average_speed,
        l.is_entry_fastest_lap, l.is_deleted
-FROM lap l;
+FROM jolpica.lap l;
 
 -- Migrate Pit Stop (no api_id)
-INSERT INTO v2_pit_stop (id, session_entry_id, lap_id, number, duration, local_timestamp)
-SELECT id, session_entry_id, lap_id, number, duration, local_timestamp FROM pit_stop;
+INSERT INTO pit_stop (id, session_entry_id, lap_id, number, duration, local_timestamp)
+SELECT id, session_entry_id, lap_id, number, duration, local_timestamp FROM jolpica.pit_stop;
 
 -- Migrate Penalty (no api_id)
-INSERT INTO v2_penalty (id, earned_session_entry_id, served_session_entry_id,
+INSERT INTO penalty (id, earned_session_entry_id, served_session_entry_id,
                         position, license_points, is_time_served_in_pit, time)
 SELECT id, earned_id, served_id, position, license_points,
-       is_time_served_in_pit, time FROM penalty;
+       is_time_served_in_pit, time FROM jolpica.penalty;
 
--- FIX 6: Countries Lookup — source table only has (country_code, country).
+-- Countries Lookup — source table only has (country_code, country).
 -- Use rowid as surrogate PK; iso_alpha3 and continent don't exist in source,
 -- so insert NULL for those columns (enrich later if desired).
-INSERT INTO v2_countries (id, country_code, country, iso_alpha3, continent)
+INSERT INTO countries (id, country_code, country, iso_alpha3, continent)
 SELECT rowid, country_code, country, NULL, NULL
-FROM _countries_lookup;
+FROM jolpica._countries_lookup;
 
 -- ============================================================
--- PART 9: CREATE YEAR-GRAIN ATTRIBUTE TABLES FROM EXISTING DATA
+-- PART 10: CREATE YEAR-GRAIN ATTRIBUTE TABLES FROM EXISTING DATA
 -- ============================================================
 
--- FIX 7: Driver Nationality Per Season — COALESCE NULL nationality to 'Unknown'.
-INSERT INTO v2_driver_season (driver_id, season_id, nationality, country_code)
+-- Driver Nationality Per Season — COALESCE NULL nationality to 'Unknown'.
+INSERT INTO driver_season (driver_id, season_id, nationality, country_code)
 SELECT td.driver_id, td.season_id,
        COALESCE(d.nationality, 'Unknown') AS nationality,
        d.country_code
-FROM team_driver td
-JOIN driver d ON td.driver_id = d.id
+FROM jolpica.team_driver td
+JOIN jolpica.driver d ON td.driver_id = d.id
 GROUP BY td.driver_id, td.season_id;
 
--- FIX 8: Constructor Season — COALESCE NULL nationality and name to 'Unknown'.
-INSERT INTO v2_constructor_season (constructor_id, season_id, name, nationality, country_code, base_constructor_id)
+-- Constructor Season — COALESCE NULL nationality and name to 'Unknown'.
+INSERT INTO constructor_season (constructor_id, season_id, name, nationality, country_code, constructor_base_id)
 SELECT td.team_id, td.season_id,
        COALESCE(t.name, 'Unknown') AS name,
        COALESCE(t.nationality, 'Unknown') AS nationality,
        t.country_code, t.base_team_id
-FROM team_driver td
-JOIN team t ON td.team_id = t.id
+FROM jolpica.team_driver td
+JOIN jolpica.team t ON td.team_id = t.id
 GROUP BY td.team_id, td.season_id;
 
 -- ============================================================
--- PART 10: POPULATE ENGINE TABLE
+-- PART 11: POPULATE ENGINE TABLE
 -- ============================================================
 
-INSERT INTO v2_engine (id, name, reference, nationality, founded_year, wikipedia) VALUES
+INSERT INTO engine (id, name, reference, nationality, founded_year, wikipedia) VALUES
 (1, 'Ferrari', 'ferrari', 'Italian', 1929, 'https://en.wikipedia.org/wiki/Scuderia_Ferrari'),
 (2, 'Mercedes', 'mercedes', 'German', 1926, 'https://en.wikipedia.org/wiki/Mercedes-Benz_in_Formula_One'),
 (3, 'Renault', 'renault', 'French', 1977, 'https://en.wikipedia.org/wiki/Renault_in_Formula_One'),
@@ -443,44 +456,43 @@ INSERT INTO v2_engine (id, name, reference, nationality, founded_year, wikipedia
 (17, 'Porsche', 'porsche', 'German', 1931, 'https://en.wikipedia.org/wiki/Porsche_in_Formula_One'),
 (18, 'Ford', 'ford', 'American', 1962, 'https://en.wikipedia.org/wiki/Cosworth_DFV');
 
--- FIXED: resolve season_id via year join (was using calendar years as season IDs, breaking FK relationship)
--- Extend by adding another UNION ALL row to the mapping subquery.
-INSERT INTO v2_constructor_engine (constructor_id, season_id, engine_id, engine_ref_override)
+-- Resolve season_id via year join (was using calendar years as season IDs, breaking FK relationship)
+INSERT INTO constructor_engine (constructor_id, season_id, engine_id, engine_ref_override)
 SELECT c.id, s.id, e.id, NULL
 FROM (
     SELECT 'ferrari'  AS constructor_ref, 'ferrari'  AS engine_ref, 2005 AS first_year, 2025 AS last_year
     UNION ALL
     SELECT 'mercedes', 'mercedes', 2010, 2025
 ) AS m
-JOIN v2_constructor c ON c.reference = m.constructor_ref
-JOIN v2_engine      e ON e.reference = m.engine_ref
-JOIN v2_season      s ON s.year BETWEEN m.first_year AND m.last_year;
+JOIN constructor c ON c.reference = m.constructor_ref
+JOIN engine      e ON e.reference = m.engine_ref
+JOIN season      s ON s.year BETWEEN m.first_year AND m.last_year;
 
 -- ============================================================
--- PART 11: CREATE INDEXES
+-- PART 12: CREATE INDEXES
 -- ============================================================
 
-CREATE INDEX IF NOT EXISTS idx_v2_round_season ON v2_round(season_id);
-CREATE INDEX IF NOT EXISTS idx_v2_round_circuit ON v2_round(circuit_id);
-CREATE INDEX IF NOT EXISTS idx_v2_session_round ON v2_session(round_id);
-CREATE INDEX IF NOT EXISTS idx_v2_session_type ON v2_session(type);
-CREATE INDEX IF NOT EXISTS idx_v2_session_entry_session ON v2_session_entry(session_id);
-CREATE INDEX IF NOT EXISTS idx_v2_session_entry_position ON v2_session_entry(position);
-CREATE INDEX IF NOT EXISTS idx_v2_driver_season_driver ON v2_driver_season(driver_id);
-CREATE INDEX IF NOT EXISTS idx_v2_driver_season_year ON v2_driver_season(season_id);
-CREATE INDEX IF NOT EXISTS idx_v2_constructor_season_constructor ON v2_constructor_season(constructor_id);
-CREATE INDEX IF NOT EXISTS idx_v2_constructor_season_year ON v2_constructor_season(season_id);
-CREATE INDEX IF NOT EXISTS idx_v2_constructor_engine_constructor ON v2_constructor_engine(constructor_id);
-CREATE INDEX IF NOT EXISTS idx_v2_constructor_driver_season ON v2_constructor_driver(season_id);
-CREATE INDEX IF NOT EXISTS idx_v2_constructor_driver_driver ON v2_constructor_driver(driver_id);
-CREATE INDEX IF NOT EXISTS idx_v2_driver_champ_driver ON v2_driver_championship(driver_id);
-CREATE INDEX IF NOT EXISTS idx_v2_driver_champ_season ON v2_driver_championship(season_id);
-CREATE INDEX IF NOT EXISTS idx_v2_constructor_champ_constructor ON v2_constructor_championship(constructor_id);
-CREATE INDEX IF NOT EXISTS idx_v2_lap_session_entry ON v2_lap(session_entry_id, number);
-CREATE INDEX IF NOT EXISTS idx_v2_pitstop_session_entry ON v2_pit_stop(session_entry_id);
+CREATE INDEX IF NOT EXISTS idx_round_season ON round(season_id);
+CREATE INDEX IF NOT EXISTS idx_round_circuit ON round(circuit_id);
+CREATE INDEX IF NOT EXISTS idx_session_round ON session(round_id);
+CREATE INDEX IF NOT EXISTS idx_session_type ON session(type);
+CREATE INDEX IF NOT EXISTS idx_session_entry_session ON session_entry(session_id);
+CREATE INDEX IF NOT EXISTS idx_session_entry_position ON session_entry(position);
+CREATE INDEX IF NOT EXISTS idx_driver_season_driver ON driver_season(driver_id);
+CREATE INDEX IF NOT EXISTS idx_driver_season_year ON driver_season(season_id);
+CREATE INDEX IF NOT EXISTS idx_constructor_season_constructor ON constructor_season(constructor_id);
+CREATE INDEX IF NOT EXISTS idx_constructor_season_year ON constructor_season(season_id);
+CREATE INDEX IF NOT EXISTS idx_constructor_engine_constructor ON constructor_engine(constructor_id);
+CREATE INDEX IF NOT EXISTS idx_constructor_driver_season ON constructor_driver(season_id);
+CREATE INDEX IF NOT EXISTS idx_constructor_driver_driver ON constructor_driver(driver_id);
+CREATE INDEX IF NOT EXISTS idx_driver_champ_driver ON driver_championship(driver_id);
+CREATE INDEX IF NOT EXISTS idx_driver_champ_season ON driver_championship(season_id);
+CREATE INDEX IF NOT EXISTS idx_constructor_champ_constructor ON constructor_championship(constructor_id);
+CREATE INDEX IF NOT EXISTS idx_lap_session_entry ON lap(session_entry_id, number);
+CREATE INDEX IF NOT EXISTS idx_pitstop_session_entry ON pit_stop(session_entry_id);
 
 -- ============================================================
--- PART 12: CREATE f1summary VIEW
+-- PART 13: CREATE f1summary VIEW
 -- ============================================================
 
 CREATE VIEW IF NOT EXISTS f1summary AS
@@ -521,18 +533,30 @@ SELECT
     e.reference                  AS engineReference,
     e.name                       AS engineName,
     e.nationality                AS engineNationality
-FROM v2_session_entry se
-INNER JOIN v2_session sess ON se.session_id = sess.id
-INNER JOIN v2_round rnd ON sess.round_id = rnd.id
-INNER JOIN v2_round_entry re ON se.round_entry_id = re.id
-INNER JOIN v2_constructor_driver cd ON re.constructor_driver_id = cd.id
-INNER JOIN v2_driver d ON cd.driver_id = d.id
-INNER JOIN v2_constructor c ON cd.constructor_id = c.id
-INNER JOIN v2_season sn ON cd.season_id = sn.id
-INNER JOIN v2_driver_season ds ON d.id = ds.driver_id AND sn.id = ds.season_id
-INNER JOIN v2_constructor_season cs ON c.id = cs.constructor_id AND sn.id = cs.season_id
-LEFT JOIN v2_constructor_engine ce ON c.id = ce.constructor_id AND sn.id = ce.season_id
-LEFT JOIN v2_engine e ON ce.engine_id = e.id
-LEFT JOIN v2_driver_championship dc ON dc.driver_id = d.id AND dc.session_id = sess.id
+FROM session_entry se
+INNER JOIN session sess ON se.session_id = sess.id
+INNER JOIN round rnd ON sess.round_id = rnd.id
+INNER JOIN round_entry re ON se.round_entry_id = re.id
+INNER JOIN constructor_driver cd ON re.constructor_driver_id = cd.id
+INNER JOIN driver d ON cd.driver_id = d.id
+INNER JOIN constructor c ON cd.constructor_id = c.id
+INNER JOIN season sn ON cd.season_id = sn.id
+INNER JOIN driver_season ds ON d.id = ds.driver_id AND sn.id = ds.season_id
+INNER JOIN constructor_season cs ON c.id = cs.constructor_id AND sn.id = cs.season_id
+LEFT JOIN constructor_engine ce ON c.id = ce.constructor_id AND sn.id = ce.season_id
+LEFT JOIN engine e ON ce.engine_id = e.id
+LEFT JOIN driver_championship dc ON dc.driver_id = d.id AND dc.session_id = sess.id
 WHERE sess.type = 'R'
   AND sn.year < strftime('%Y', 'now');
+
+-- ============================================================
+-- PART 14: DETACH SOURCE
+-- ============================================================
+
+DETACH DATABASE jolpica;
+
+-- ============================================================
+-- PART 15: FINAL CLEANUP
+-- ============================================================
+
+VACUUM;

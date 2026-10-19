@@ -14,8 +14,3 @@ target-path: "target"
 clean-targets:
   - "target"
   - "dbt_packages"
-
-# Model configs
-models:
-  f1_etl:
-    +materialized: view

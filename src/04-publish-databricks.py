@@ -40,7 +40,7 @@ def env(name: str, default: str = "") -> str:
         return default
     return value.strip() or default
 
-SQLITE_PATH = env("SQLITE_PATH", "dist/formula1.db")
+SQLITE_PATH = env("SQLITE_PATH", "dist/jolpica.db")
 SERVER_HOSTNAME = os.environ["DATABRICKS_SERVER_HOSTNAME"]
 HTTP_PATH = os.environ["DATABRICKS_HTTP_PATH"]
 ACCESS_TOKEN = os.environ["DATABRICKS_TOKEN"]

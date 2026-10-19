@@ -1,3 +1,4 @@
+.bail on
 -- ============================================================
 -- TRANSFORM: jolpica.db → formula1.db
 -- Reads from attached jolpica.db, writes to main database (formula1.db)

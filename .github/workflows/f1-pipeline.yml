@@ -69,6 +69,18 @@ jobs:
       
       - name: Build jolpica.db (raw tables only)
         run: python src/02-load.py
+
+      - name: Verify jolpica.db exists
+        run: |
+          if [ ! -f "dist/jolpica.db" ]; then
+            echo "ERROR: jolpica.db was not created!"
+            echo "Checking output folder:"
+            ls -la dist/ 2>/dev/null || echo "dist/ folder doesn't exist"
+            echo "Checking log output:"
+            cat src/load.log 2>/dev/null || echo "No log file found"
+            exit 1
+          fi
+          echo "Database exists: $(ls -lh dist/jolpica.db)"
       
       - name: Upload jolpica.db
         uses: actions/upload-artifact@v4

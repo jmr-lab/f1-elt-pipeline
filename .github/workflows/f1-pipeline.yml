@@ -94,9 +94,10 @@ jobs:
         run: |
           echo "=== DB folder contents ==="
           ls -la dist/
-          echo ""
-          echo "=== Table count ==="
-          sqlite3 dist/jolpica.db "SELECT COUNT(*) FROM sqlite_master WHERE type='table';"
+          test -f dist/jolpica.db || { echo "ERROR: dist/jolpica.db not created"; exit 1; }
+          tables=$(sqlite3 dist/jolpica.db "SELECT COUNT(*) FROM sqlite_master WHERE type='table';")
+          echo "Table count: $tables"
+          [ "$tables" -gt 0 ] || { echo "ERROR: jolpica.db has no tables"; exit 1; }
 
       - name: Commit jolpica.db
         run: |
@@ -112,6 +113,14 @@ jobs:
     needs: load
     
     steps:
+      - name: Verify jolpica.db before transform
+        working-directory: dist
+        run: |
+          test -f jolpica.db || { echo "ERROR: jolpica.db missing after artifact download"; ls -la; exit 1; }
+          tables=$(sqlite3 jolpica.db "SELECT COUNT(*) FROM sqlite_master WHERE type='table';")
+          echo "Tables in jolpica.db: $tables"
+          [ "$tables" -gt 0 ] || { echo "ERROR: attached DB is empty"; exit 1; }
+
       - name: Checkout repository
         uses: actions/checkout@v4
         with:

@@ -90,6 +90,33 @@ CREATE TABLE IF NOT EXISTS engine (
     wikipedia TEXT
 );
 
+CREATE TABLE IF NOT EXISTS points_system (
+    id INTEGER PRIMARY KEY,
+    name TEXT,
+    reference TEXT,
+    partial INTEGER,
+    driver_position_points INTEGER,
+    driver_fastest_lap INTEGER,
+    team_position_points INTEGER,
+    team_fastest_lap INTEGER,
+    shared_drive INTEGER,
+    is_double_points INTEGER,
+    api_id INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS championship_system (
+    id INTEGER PRIMARY KEY,
+    name TEXT,
+    reference TEXT,
+    driver_best_results INTEGER,
+    team_best_results INTEGER,
+    driver_season_split INTEGER,
+    team_season_split INTEGER,
+    team_points_per_session INTEGER,
+    eligibility TEXT,
+    api_id INTEGER
+);
+
 CREATE TABLE IF NOT EXISTS constructor_base (
     id INTEGER PRIMARY KEY,
     name TEXT,
@@ -421,6 +448,23 @@ FROM jolpica._countries_lookup;
 INSERT INTO constructor_base (id, name, api_id)
 SELECT id, name, api_id FROM jolpica.base_team;
 
+-- Migrate Points System
+INSERT INTO points_system (id, name, reference, partial, driver_position_points,
+                           driver_fastest_lap, team_position_points, team_fastest_lap,
+                           shared_drive, is_double_points, api_id)
+SELECT id, name, reference, partial, driver_position_points,
+       driver_fastest_lap, team_position_points, team_fastest_lap,
+       shared_drive, is_double_points, api_id FROM jolpica.points_system;
+
+-- Migrate Championship System
+INSERT INTO championship_system (id, name, reference, driver_best_results,
+                                  team_best_results, driver_season_split,
+                                  team_season_split, team_points_per_session,
+                                  eligibility, api_id)
+SELECT id, name, reference, driver_best_results, team_best_results,
+       driver_season_split, team_season_split, team_points_per_session,
+       eligibility, api_id FROM jolpica.championship_system;
+
 -- ============================================================
 -- PART 10: CREATE YEAR-GRAIN ATTRIBUTE TABLES FROM EXISTING DATA
 -- ============================================================
@@ -502,6 +546,8 @@ CREATE INDEX IF NOT EXISTS idx_driver_champ_season ON driver_championship(season
 CREATE INDEX IF NOT EXISTS idx_constructor_champ_constructor ON constructor_championship(constructor_id);
 CREATE INDEX IF NOT EXISTS idx_lap_session_entry ON lap(session_entry_id, number);
 CREATE INDEX IF NOT EXISTS idx_pitstop_session_entry ON pit_stop(session_entry_id);
+CREATE INDEX IF NOT EXISTS idx_points_system_id ON points_system(id);
+CREATE INDEX IF NOT EXISTS idx_championship_system_id ON championship_system(id);
 
 -- ============================================================
 -- PART 13: CREATE f1summary VIEW

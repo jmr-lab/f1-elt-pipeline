@@ -1,4 +1,4 @@
-name: F1 ETL Pipeline
+name: F1 ELT Pipeline
 
 on:
   workflow_dispatch:
@@ -19,7 +19,8 @@ concurrency:
 jobs:
   extract:
     runs-on: ubuntu-latest
-    
+    name: Extract
+   
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -47,6 +48,7 @@ jobs:
 
   load:
     runs-on: ubuntu-latest
+    name: Load
     needs: extract
     
     steps:
@@ -110,6 +112,7 @@ jobs:
 
   transform:
     runs-on: ubuntu-latest
+    name: Transform
     needs: load
     
     steps:
@@ -188,7 +191,7 @@ jobs:
           echo "=== Row counts ==="
           sqlite3 formula1.db "SELECT 'season', COUNT(*) FROM season UNION ALL SELECT 'driver', COUNT(*) FROM driver UNION ALL SELECT 'lap', COUNT(*) FROM lap;"
 
-      - name: Initialize dbt profile
+      - name: Initialise dbt profile
         run: |
           mkdir -p ~/.dbt
           printf '%s\n' \
@@ -236,10 +239,45 @@ jobs:
           allowUpdates: true
           makeLatest: true
           generateReleaseNotes: false
-          body: "Automated database update from F1 ETL pipeline"
+          body: "Automated database update from F1 ELT pipeline"
 
+  publish_databricks:
+    name: Publish to Databricks
+    needs: [load]
+    runs-on: ubuntu-latest
+    # Publish should now be required for success
+    continue-on-error: false
+    
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Download jolpica.db
+        uses: actions/download-artifact@v4
+        with:
+          name: jolpica-db
+          path: dist/
+
+      - name: Install dependencies
+        run: pip install "databricks-sql-connector>=3.0" pandas pyarrow requests
+
+      - name: Publish jolpica.db to Databricks
+        timeout-minutes: 30
+        env:
+          SQLITE_PATH: dist/jolpica.db
+          DATABRICKS_SERVER_HOSTNAME: ${{ secrets.DATABRICKS_SERVER_HOSTNAME }}
+          DATABRICKS_HTTP_PATH: ${{ secrets.DATABRICKS_HTTP_PATH }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          DATABRICKS_CATALOG: ${{ vars.DATABRICKS_CATALOG }}
+          JOLPICA_SCHEMA: jolpica
+        run: python src/04-publish-databricks.py
+  
   deploy_docs:
     runs-on: ubuntu-latest
+    name: Deploy Documentation
     needs: transform
     if: always()
     
@@ -273,38 +311,3 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
-
-  publish_databricks:
-    name: Publish to Databricks
-    needs: [transform]
-    runs-on: ubuntu-latest
-    # Publish should now be required for success
-    continue-on-error: false
-    
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-python@v5
-        with:
-          python-version: '3.12'
-
-      - name: Download jolpica.db
-        uses: actions/download-artifact@v4
-        with:
-          name: jolpica-db
-          path: dist/
-
-      - name: Install dependencies
-        run: pip install "databricks-sql-connector>=3.0" pandas pyarrow requests
-
-      - name: Publish jolpica.db to Databricks
-        timeout-minutes: 30
-        env:
-          SQLITE_PATH: dist/jolpica.db
-          DATABRICKS_SERVER_HOSTNAME: ${{ secrets.DATABRICKS_SERVER_HOSTNAME }}
-          DATABRICKS_HTTP_PATH: ${{ secrets.DATABRICKS_HTTP_PATH }}
-          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
-          DATABRICKS_CATALOG: ${{ vars.DATABRICKS_CATALOG }}
-          JOLPICA_SCHEMA: jolpica
-        run: python src/04-publish-databricks.py
-  

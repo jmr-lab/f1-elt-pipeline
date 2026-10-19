@@ -113,14 +113,6 @@ jobs:
     needs: load
     
     steps:
-      - name: Verify jolpica.db before transform
-        working-directory: dist
-        run: |
-          test -f jolpica.db || { echo "ERROR: jolpica.db missing after artifact download"; ls -la; exit 1; }
-          tables=$(sqlite3 jolpica.db "SELECT COUNT(*) FROM sqlite_master WHERE type='table';")
-          echo "Tables in jolpica.db: $tables"
-          [ "$tables" -gt 0 ] || { echo "ERROR: attached DB is empty"; exit 1; }
-
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
@@ -141,6 +133,33 @@ jobs:
         with:
           name: jolpica-db
           path: dist
+
+      - name: Verify jolpica.db before transform
+        working-directory: dist
+        run: |
+          test -f jolpica.db || { echo "ERROR: jolpica.db missing after artifact download"; ls -la; exit 1; }
+          tables=$(sqlite3 jolpica.db "SELECT COUNT(*) FROM sqlite_master WHERE type='table';")
+          echo "Tables in jolpica.db: $tables"
+          [ "$tables" -gt 0 ] || { echo "ERROR: attached DB is empty"; exit 1; }
+
+      - name: Verify artifact download
+        run: |
+          echo "=== Checking download result ==="
+          if [ ! -d "dist" ]; then
+            echo "ERROR: dist folder was not created by artifact download"
+            exit 1
+          fi
+          
+          echo "dist folder contents:"
+          ls -la dist/
+          
+          if [ ! -f "dist/jolpica.db" ]; then
+            echo "ERROR: jolpica.db not found after artifact download"
+            exit 1
+          fi
+          
+          echo "jolpica.db size: $(stat -c %s dist/jolpica.db) bytes"
+          echo "Tables: $(sqlite3 dist/jolpica.db ".tables" | tr ' ' '\n' | wc -l)"
       
       - name: Build formula1.db (transform)
         working-directory: dist

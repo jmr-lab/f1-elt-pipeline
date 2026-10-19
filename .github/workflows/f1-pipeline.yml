@@ -137,21 +137,23 @@ jobs:
           echo ""
           echo "=== Row counts ==="
           sqlite3 formula1.db "SELECT 'season', COUNT(*) FROM season UNION ALL SELECT 'driver', COUNT(*) FROM driver UNION ALL SELECT 'lap', COUNT(*) FROM lap;"
-      
+
       - name: Initialize dbt profile
         run: |
           mkdir -p ~/.dbt
-          cat > ~/.dbt/profiles.yml <<EOF
-          sqlite:
-            target: dev
-            outputs:
-              dev:
-                type: sqlite
-                database: 'database'
-                schema: 'main'
-                schemas_and_paths:
-                  main: ${GITHUB_WORKSPACE}/dist/formula1.db
-          EOF
+          printf '%s\n' \
+            'sqlite:' \
+            '  target: dev' \
+            '  outputs:' \
+            '    dev:' \
+            '      type: sqlite' \
+            '      threads: 1' \
+            "      database: 'database'" \
+            "      schema: 'main'" \
+            '      schemas_and_paths:' \
+            "        main: ${GITHUB_WORKSPACE}/dist/formula1.db" \
+            "      schema_directory: ${GITHUB_WORKSPACE}/dist" \
+            > ~/.dbt/profiles.yml
       
       - name: Run dbt debug
         working-directory: dbt

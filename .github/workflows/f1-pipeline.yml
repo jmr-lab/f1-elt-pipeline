@@ -97,6 +97,15 @@ jobs:
           echo "=== Table count ==="
           sqlite3 dist/jolpica.db "SELECT COUNT(*) FROM sqlite_master WHERE type='table';"
 
+      - name: Commit jolpica.db
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          mkdir -p dist
+          git add -f dist/jolpica.db
+          git commit -m "Update jolpica.db [skip ci]" || echo "Nothing to commit"
+          git push
+
   transform:
     runs-on: ubuntu-latest
     needs: load

@@ -88,6 +88,12 @@ CREATE TABLE IF NOT EXISTS engine (
     wikipedia TEXT
 );
 
+CREATE TABLE IF NOT EXISTS constructor_base (
+    id INTEGER PRIMARY KEY,
+    name TEXT,
+    api_id INTEGER
+);
+
 -- ============================================================
 -- PART 4: CREATE YEAR-GRAIN ATTRIBUTE HISTORY TABLES
 -- ============================================================
@@ -409,6 +415,10 @@ INSERT INTO countries (id, country_code, country, iso_alpha3, continent)
 SELECT rowid, country_code, country, NULL, NULL
 FROM jolpica._countries_lookup;
 
+-- Migrate Base Team → constructor_base (renamed for consistency)
+INSERT INTO constructor_base (id, name, api_id)
+SELECT id, name, api_id FROM jolpica.baseteam;
+
 -- ============================================================
 -- PART 10: CREATE YEAR-GRAIN ATTRIBUTE TABLES FROM EXISTING DATA
 -- ============================================================
@@ -423,6 +433,16 @@ JOIN jolpica.driver d ON td.driver_id = d.id
 GROUP BY td.driver_id, td.season_id;
 
 -- Constructor Season — COALESCE NULL nationality and name to 'Unknown'.
+INSERT INTO constructor_season (constructor_id, season_id, name, nationality, country_code, constructor_base_id)
+SELECT td.team_id, td.season_id,
+       COALESCE(t.name, 'Unknown') AS name,
+       COALESCE(t.nationality, 'Unknown') AS nationality,
+       t.country_code, t.base_team_id
+FROM jolpica.team_driver td
+JOIN jolpica.team t ON td.team_id = t.id
+GROUP BY td.team_id, td.season_id;
+
+-- Constructor Season — include constructor_base_id
 INSERT INTO constructor_season (constructor_id, season_id, name, nationality, country_code, constructor_base_id)
 SELECT td.team_id, td.season_id,
        COALESCE(t.name, 'Unknown') AS name,

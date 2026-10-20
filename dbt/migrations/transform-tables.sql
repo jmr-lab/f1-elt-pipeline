@@ -8,11 +8,6 @@
 ATTACH DATABASE 'jolpica.db' AS jolpica;
 
 -- ============================================================
--- PART 1: DROP EXISTING VIEW IF EXISTS
--- ============================================================
-DROP VIEW  IF EXISTS main.f1summary;
-
--- ============================================================
 -- PART 2: DROP EXISTING OBJECTS (main schema ONLY)
 -- ============================================================
 DROP TABLE IF EXISTS main.season;
@@ -548,64 +543,6 @@ CREATE INDEX IF NOT EXISTS idx_lap_session_entry ON lap(session_entry_id, number
 CREATE INDEX IF NOT EXISTS idx_pitstop_session_entry ON pit_stop(session_entry_id);
 CREATE INDEX IF NOT EXISTS idx_points_system_id ON points_system(id);
 CREATE INDEX IF NOT EXISTS idx_championship_system_id ON championship_system(id);
-
--- ============================================================
--- PART 13: CREATE f1summary VIEW
--- ============================================================
-
-CREATE VIEW IF NOT EXISTS f1summary AS
-SELECT
-    se.id                        AS resultId,
-    se.grid                      AS grid,
-    se.position                  AS positionOrder,
-    dc.points                    AS cumulPoints,
-    se.points                    AS points,
-    se.laps_completed            AS laps,
-    se.fastest_lap_rank          AS "rank",
-    CASE
-        WHEN se.detail GLOB '+[0-9][0-9]* Lap'
-            THEN 'Lapsed'
-        WHEN se.detail IN ('107% Rule', 'Did not qualify', 'Did not prequalify')
-            THEN 'Not Qualified'
-        WHEN se.detail IN ('Finished', 'Disqualified', 'Not classified', 'Lapsed')
-            THEN se.detail
-        ELSE 'Abandoned'
-    END                          AS status,
-    sn.year                      AS year,
-    rnd.number                   AS round,
-    rnd.name                     AS circuit,
-    d.forename || ' ' || d.surname
-                                 AS driverName,
-    sn.year - CAST(strftime('%Y', d.date_of_birth) AS INTEGER)
-                                 AS driverAge,
-    cs.name                      AS constructorName,
-    ds.nationality               AS driverCountry,
-    cs.nationality               AS constructorCountry,
-    'images/icons8-' ||
-        replace(lower(ds.nationality), ' ', '-') ||
-        '-50.png'                AS driverImage,
-    'images/icons8-' ||
-        replace(lower(cs.nationality), ' ', '-') ||
-        '-50.png'                AS constructorImage,
-    ce.engine_id                 AS engineId,
-    e.reference                  AS engineReference,
-    e.name                       AS engineName,
-    e.nationality                AS engineNationality
-FROM session_entry se
-INNER JOIN session sess ON se.session_id = sess.id
-INNER JOIN round rnd ON sess.round_id = rnd.id
-INNER JOIN round_entry re ON se.round_entry_id = re.id
-INNER JOIN constructor_driver cd ON re.constructor_driver_id = cd.id
-INNER JOIN driver d ON cd.driver_id = d.id
-INNER JOIN constructor c ON cd.constructor_id = c.id
-INNER JOIN season sn ON cd.season_id = sn.id
-INNER JOIN driver_season ds ON d.id = ds.driver_id AND sn.id = ds.season_id
-INNER JOIN constructor_season cs ON c.id = cs.constructor_id AND sn.id = cs.season_id
-LEFT JOIN constructor_engine ce ON c.id = ce.constructor_id AND sn.id = ce.season_id
-LEFT JOIN engine e ON ce.engine_id = e.id
-LEFT JOIN driver_championship dc ON dc.driver_id = d.id AND dc.session_id = sess.id
-WHERE sess.type = 'R'
-  AND sn.year < strftime('%Y', 'now');
 
 -- ============================================================
 -- PART 14: DETACH SOURCE

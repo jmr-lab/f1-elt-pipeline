@@ -44,6 +44,33 @@ flowchart LR
 3. **Transform** — Produces formula1.db from transform-tables.sql, then runs dbt tests and generates documentation
 4. **Publish** — Mirrors the raw tables into Databricks as Delta tables for interactive analysis
 
+## Architectural Decisions & Trade-offs
+
+Design decisions, their rationale, and deliberate omissions. Full records in [`docs/adr/`](docs/adr/).
+
+| Decision | Rationale |
+|----------|-----------|
+| **SQLite as intermediate format** | Enables fast local validation of referential integrity before any cloud operation; keeps transform logic testable offline |
+| **Full reload, not incremental** | ~890K rows; historical data only; retroactive steward rulings make append-only logic unsafe |
+| **Parallel `transform` and `publish_databricks`** | A Databricks outage or token expiry must not block the SQLite build, release, or docs |
+| **`main.`-qualified DROP statements** | Unqualified DROPs fall through to attached schemas and destroy source tables — see ADR-0006 |
+| **Manual Databricks token rotation** | Free Edition tokens expire every 730 days and cannot be extended; automation would require a second long-lived credential |
+| **Mutable `data-latest` release tag** | Simple for consumers; versioned immutable releases are a candidate improvement (see below) |
+
+### Deliberately Not Implemented
+
+**Incremental processing.** Full reloads are cheap at this scale and sidestep the problem of retroactive corrections — F1 stewards issue disqualifications and points adjustments after the fact, which append-only logic would miss. Revisit if runtime exceeds ~20 minutes or upstream introduces intra-day granularity.
+
+**Schema drift detection.** Currently, an upstream column addition or rename would surface as a dbt test failure rather than a clear diagnostic. A per-table column hash checked at ingest would fail faster and with a better message.
+
+**Immutable release versioning.** `data-latest` is overwritten each run, so downstream consumers cannot pin a specific dataset version. Publishing `data-YYYYMMDD` alongside the moving pointer would enable reproducible analysis.
+
+### Known Constraints
+
+- Databricks Free Edition: serverless-only compute, one 2X-Small SQL warehouse, 5 concurrent job tasks, fair-usage quota that suspends compute when exceeded
+- Personal access tokens expire every 730 days max and cannot be extended after creation — only replaced
+- `lap` (≈735K rows) is excluded from analysis; it dominates table size and is not needed for the current use case
+
 ## Workflow Execution
 
 The workflow consists of three jobs that execute sequentially:

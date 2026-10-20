@@ -1,7 +1,7 @@
 version: 2
 
 models:
-  - name: f1summary2
+  - name: f1summary
     description: "Summary of F1 race results by driver with standings context (dbt-built twin of f1summary)"
     meta:
       owner: "jmr-lab"

@@ -78,7 +78,7 @@ The workflow runs:
 ## Features
 
 1. **Extract**
-- Downloads full F1 database dump from Jolpica (17+ CSV tables)
+- Downloads the full F1 database dump from Jolpica (19 CSV tables)
 - Automatic freshness check (skips download if data < 7 days old)
 - Streaming download for large files (~40MB compressed)
 - Preserves original Ergast/Jolpica table schemas
@@ -90,31 +90,53 @@ The workflow runs:
 - ~880K rows total covering all F1 races since 1950
 
 3. **Transform**
-- **dbt-powered** SQL transformations with dependency tracking
-- Creates f1summary view joining race results with driver/team metadata
+- transform-tables.sql reshapes the raw schema into the analytics schema and defines the f1summary view
+- **dbt** provides dependency tracking, column-level tests, and generated documentation over the transformed database
 - Derived fields: driver age, cumulative points, country flag image paths
 - Ready for expansion: add models, tests, and documentation via dbt
+
+4. **Publish**
+- Exports each raw SQLite table to Parquet, stages it in a Unity Catalog volume, and loads it into Delta tables via COPY INTO
+- Automatic type widening: SQLite's loosely-typed columns are inspected and mapped to appropriate Spark types
+- Row-count verification against the source before the run is considered successful
+
+## Databricks Publishing
+
+The publish_databricks job mirrors the raw dataset into Databricks, giving a queryable copy for exploratory analysis without needing to download the SQLite file.
+
+| Property | Value |
+| ----- | ----------- |
+| Source | dist/jolpica.db |
+| Target | Databricks schema jolpica |
+| Tables | 17 |
+| Staging | Unity Catalog volume f1_staging |
+| Load mechanism | COPY INTO from Parquet |
+
+Authentication uses a personal access token supplied through the DATABRICKS_TOKEN repository secret, along with DATABRICKS_SERVER_HOSTNAME, DATABRICKS_HTTP_PATH, and the DATABRICKS_CATALOG repository variable.
 
 ## Directory Structure
 
 ```
 f1-etl-pipeline/
 ├── .github/workflows/
-│   └── f1-etl-pipeline.yml    # CI/CD orchestration
+│   └── f1-etl-pipeline.yml        # CI/CD orchestration
 ├── src/
-│   ├── 01-extract.py          # Download & unpack Jolpica CSVs
-│   ├── 02-load.py             # Build SQLite star schema DB
+│   ├── 01-extract.py              # Download & unpack Jolpica CSVs
+│   ├── 02-load.py                 # Build SQLite star schema DB
+│   ├── 04-publish-databricks.py   # Publish raw tables to Databricks
 │   └── resources/
 │       └── countries_lookup.csv   # Country code → name mapping
 ├── dbt/
-│   ├── dbt_project.yml        # dbt project configuration
+│   ├── dbt_project.yml            # dbt project configuration
+│   ├── migrations/
+│   │   └── transform-tables.sql   # Analytics schema + f1summary view
 │   └── models/
-│       ├── f1summary.sql      # Analytics view definition
-│       └── schema.yml         # Column documentation & tests
+│       └── sources.yml            # Source declarations, column docs & tests
 ├── dist/
-│   └── formula1.db            # Output database with views
+│   ├── jolpica.db                 # Raw star schema DB (committed)
+│   └── formula1.db                # Transformed DB with views (build artefact)
 ├── output/
-│   └── extracted_data.pkl     # Intermediate pickle (workflow only)
+│   └── extracted_data.pkl         # Intermediate pickle (workflow only)
 └── README.md
 ```
 
@@ -122,7 +144,9 @@ f1-etl-pipeline/
 
 | File | Location | Description |
 | ----- | --- | ----------- |
-| formula1.db | dist/ | Normalised SQLite database with f1summary VIEW |
+| jolpica.db | dist/ | Normalised raw SQLite database (19 tables)
+| formula1.db | dist/ | Transformed SQLite database with f1summary VIEW
+| dbt docs | GitHub Pages | Generated documentation and lineage graph
 
 The database is distributed via:
 1. **GitHub Releases** — Tagged as data-latest, downloadable from releases page
@@ -220,6 +244,9 @@ pip install pandas requests
 
 # Install dbt dependencies (for transformation step)
 pip install "dbt-core>=1.8,<2.0" "dbt-sqlite>=1.8,<2.0"
+
+# Install Databricks dependencies (for the publish step)
+pip install "databricks-sql-connector>=3.0" pyarrow
 ```
 
 ## Usage
@@ -233,9 +260,16 @@ python src/01-extract.py
 # Step 2: Load (build SQLite database)
 python src/02-load.py
 
-# Step 3: Transform (run dbt views)
-cd dbt
-dbt run
+# Step 3: Transform (build formula1.db, then run dbt)
+cd dist && sqlite3 formula1.db < ../dbt/migrations/transform-tables.sql && cd ..
+cd dbt && dbt run && cd ..
+
+# Step 4: Publish to Databricks (requires credentials)
+export DATABRICKS_SERVER_HOSTNAME=...
+export DATABRICKS_HTTP_PATH=...
+export DATABRICKS_TOKEN=...
+export DATABRICKS_CATALOG=...
+python src/04-publish-databricks.py
 ```
 
 ### Querying the Database
@@ -263,21 +297,15 @@ All raw data originates from Jolpica, a maintained fork of the Ergast F1 Databas
 - **pandas** : CSV parsing and DataFrame manipulation
 - **SQLite** : Lightweight relational database (single-file)
 - **dbt 1.9.x** : SQL transformations and view management
+- **Databricks** : Cloud lakehouse for interactive analysis of the raw dataset
 - **GitHub Actions** : Automated CI/CD pipeline
+- **GitHub Pages** : Hosted dbt documentation
 
 ## Related Projects
 
 | Project               | Language         | Purpose                              |
 | --------------------- | ---------------- | ------------------------------------ |
 | Formula-1 Analytics   | R (tidyverse)    | EDA, visualisations, GOAT modelling  |
-
-## Why Two Languages?
-
-Separating ETL from analysis delivers practical advantages:
-- Python excels at robust data pipelines, batch processing, and database operations
-- R provides superior statistical modelling, visualisation (ggplot2), and exploratory analysis
-
-The Python pipeline delivers clean, validated data to the R project, enabling analysts to focus on insights without reinventing the data engineering work.
 
 ## Data Freshness
 
@@ -307,24 +335,18 @@ If you encounter schemas_and_paths or profile configuration errors:
 - Verify ~/.dbt/profiles.yml was created by the workflow step
 - Check dbt_project.yml references profile: 'sqlite'
 
+### Databricks Authentication Failed
+
+If the publish job fails with an authentication or token error:
+
+- Databricks personal access tokens expire and cannot be extended after creation
+- Generate a new token in Settings → Developer → Access Tokens
+- Update the DATABRICKS_TOKEN repository secret with the new value
+- Re-run the workflow manually
+
 ### No Changes to Commit
 
 If the database hasn't changed since the last run:
 
 - The pipeline will detect this and skip committing
 - This is normal behaviour when Jolpica's data hasn't updated
-
-## Contributing
-
-Contributions are welcome! If you'd like to enhance the pipeline:
-
-- Fork the repository
-- Create a feature branch
-- Submit a pull request with descriptive changes
-
-Potential improvements:
-
-- Add more dbt models (e.g., qualifying results, constructor points progression)
-- Implement incremental refresh strategy for large tables
-- Generate automated dbt documentation
-- Add integration tests with pytest

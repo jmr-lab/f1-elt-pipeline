@@ -1,23 +1,24 @@
-# F1 ETL Pipeline
+# F1 ELT Pipeline
 
-[![F1 ETL Pipeline](https://img.shields.io/github/actions/workflow/status/jmr-lab/f1-etl-pipeline/f1-pipeline.yml?label=F1%20ETL&logo=github)](https://github.com/jmr-lab/f1-etl-pipeline/actions)
+[![F1 ELT Pipeline](https://img.shields.io/github/actions/workflow/status/jmr-lab/f1-elt-pipeline/f1-pipeline.yml?label=F1%20ELT&logo=github)](https://github.com/jmr-lab/f1-elt-pipeline/actions)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Language](https://img.shields.io/badge/language-Python-blue.svg)](https://www.python.org/)
 [![dbt](https://img.shields.io/badge/dbt-v1.9-orange.svg)](https://www.getdbt.com/)
+[![Databricks](https://img.shields.io/badge/Databricks-jolpica-EA4335?logo=databricks)](https://www.databricks.com/)
 [![dbt Documentation](https://img.shields.io/badge/dbt_docs-pages-green)](https://jmr-lab.github.io/f1-etl-pipeline/)
 
-An ETL pipeline that downloads the official F1 database dump from [Jolpica](https://api.jolpi.ca/) and transforms it into an analytics-ready dataset for Formula 1 analytics and driver GOAT analysis. Built with Python and [dbt](https://www.getdbt.com/) for modular, production-grade data transformations.
+An ELT pipeline that downloads the official F1 database dump from [Jolpica](https://api.jolpi.ca/) and transforms it into an analytics-ready dataset for Formula 1 analytics and driver GOAT analysis. Built with Python and [dbt](https://www.getdbt.com/) for modular, production-grade data transformations, with an optional publish step that mirrors the raw dataset into Databricks for interactive exploration.
 
 ## Overview
 
-This ETL pipeline processes raw data from the Jolpica F1 database through three sequential stages: **Extraction**, **Loading**, and **Transformation**. The output is a normalised SQLite database with embedded analytic views designed for downstream consumption by the companion [Formula-1 Analytics](https://github.com/jmr-lab/Formula-1) R project.
+This ETL pipeline processes raw data from the Jolpica F1 database through four stages: **Extraction**, **Loading**, **Transformation**, and **Publishing**. The primary output is a normalised SQLite database with embedded analytic views designed for downstream consumption by the companion [Formula-1 Analytics](https://github.com/jmr-lab/Formula-1) R project. A secondary output mirrors the raw tables into Databricks for exploratory analysis.
 
 > [!NOTE]
 > This pipeline is actively developed. Planned enhancements include:
 > 
 > *   **Enhanced dbt transformations** — Additional derived metrics and staging layers.
-> *   **Data documentation** — Automated dbt docs generation for schema lineage.
 > *   **Incremental models** — Optimised refresh strategy for large historical datasets.
+> *   **Databricks-native transformations** — Moving the transform stage onto Databricks compute.
 
 ## Pipeline Architecture
 
@@ -25,18 +26,23 @@ This ETL pipeline processes raw data from the Jolpica F1 database through three 
 flowchart LR
     A[Jolpica API] -->|CSV Dump| B(Extract)
     B -->|pickle artifact| C(Load)
-    C -->|SQLite DB| D(Transform)
-    D -->|Views + DB| E[(GitHub Release)]
-    
+    C -->|jolpica.db| D(Transform)
+    C -->|jolpica.db| F(Publish)
+    D -->|formula1.db| E[(GitHub Release)]
+    D -->|dbt docs| G[(GitHub Pages)]
+    F -->|Delta tables| H[(Databricks)]
+
     B -->|Python| B
     C -->|Python| C
     D -->|dbt| D
+    F -->|Python| F
 ```
 ### Pipeline Flow:
 
-1. **Extract** — Downloads full Jolpica database dump (17+ CSV tables) with automatic freshness checks
-2. **Load** — Builds normalised SQLite star schema database (formula1.db)
-3. **Transform** — Creates f1summary view via dbt for analytics-ready queries
+1. **Extract** — Downloads the full Jolpica database dump (19 CSV tables) with automatic freshness checks
+2. **Load** — Builds the normalised SQLite star schema database (jolpica.db)
+3. **Transform** — Produces formula1.db from transform-tables.sql, then runs dbt tests and generates documentation
+4. **Publish** — Mirrors the raw tables into Databricks as Delta tables for interactive analysis
 
 ## Workflow Execution
 
@@ -44,8 +50,10 @@ The workflow consists of three jobs that execute sequentially:
 
 ```mermaid
 flowchart TD
-    extract["Extract<br/>Download Jolpica CSVs"] --> load["Load<br/>Build SQLite DB"]
-    load --> transform["Transform<br/>Run dbt Models"]
+    extract["Extract<br/>Download Jolpica CSVs"] --> load["Load<br/>Build jolpica.db"]
+    load --> transform["Transform<br/>Build formula1.db + dbt"]
+    load --> publish["Publish<br/>Upload to Databricks"]
+    transform --> docs["Deploy Docs<br/>GitHub Pages"]
 ```
 
 Each job runs on its own Ubuntu runner. Intermediate artefacts are passed between jobs using GitHub Actions artefact storage.
@@ -61,9 +69,11 @@ The workflow runs:
 
 | Job | Depends On | Produces |
 | ----- | --- | ----------- |
-| extract | None | Raw CSV files → extracted-data artefact |
-| load | extract | formula1.db → f1-database artefact |
-| transform | load | View-enriched DB → GitHub Release |
+| extract | None | output/extracted_data.pkl → extracted-data artefact |
+| load | extract | dist/jolpica.db → jolpica-db artefact, committed to the repository |
+| transform | load | dist/formula1.db → formula1-db artefact, dbt-docs artefact, data-latest release |
+| publish_databricks | load | 19 Delta tables in the Databricks jolpica schema |
+| deploy_docs | transform | dbt documentation site on GitHub Pages |
 
 ## Features
 

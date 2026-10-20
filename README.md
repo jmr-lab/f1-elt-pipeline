@@ -4,8 +4,6 @@
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![Language](https://img.shields.io/badge/language-Python-blue.svg)](https://www.python.org/)
 [![dbt](https://img.shields.io/badge/dbt-v1.9-orange.svg)](https://www.getdbt.com/)
-[![Databricks](https://img.shields.io/badge/Databricks-jolpica-EA4335?logo=databricks)](https://www.databricks.com/)
-[![Databricks](https://img.shields.io/badge/Databricks-Published-EA4335)](https://www.databricks.com/)
 [![Databricks](https://img.shields.io/badge/Databricks-jolpica-green?logo=databricks)](https://www.databricks.com/)
 [![dbt Documentation](https://img.shields.io/badge/dbt_docs-pages-green)](https://jmr-lab.github.io/f1-etl-pipeline/)
 

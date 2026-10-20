@@ -1,12 +1,11 @@
 version: 2
 
 models:
-  - name: f1summary
-    description: "Summary of F1 race results by driver with standings context"
+  - name: f1summary2
+    description: "Summary of F1 race results by driver with standings context (dbt-built twin of f1summary)"
     meta:
       owner: "jmr-lab"
       refresh_schedule: "weekly"
-
     columns:
       - name: resultId
         description: "Unique session entry identifier"

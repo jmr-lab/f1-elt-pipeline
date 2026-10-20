@@ -1,6 +1,5 @@
 # ADR-0003: Parallel Transform and Publish Jobs
 
-**Status:** Accepted
 **Date:** 2026-10-20
 
 ## Context

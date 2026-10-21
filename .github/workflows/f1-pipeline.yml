@@ -234,7 +234,8 @@ jobs:
           mkdir -p dist
           git add -f dist/formula1.db
           git commit -m "Update formula1.db [skip ci]" || echo "Nothing to commit"
-          git push      
+          git pull --rebase origin main || echo "No upstream changes to rebase"
+          git push
 
       - name: Create release
         uses: ncipollo/release-action@v1

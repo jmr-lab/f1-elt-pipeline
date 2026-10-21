@@ -205,6 +205,7 @@ jobs:
             "      schema: 'main'" \
             '      schemas_and_paths:' \
             "        main: ${GITHUB_WORKSPACE}/dist/formula1.db" \
+            "        jolpica: ${GITHUB_WORKSPACE}/dist/jolpica.db" \
             "      schema_directory: ${GITHUB_WORKSPACE}/dist" \
             > ~/.dbt/profiles.yml
       

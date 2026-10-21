@@ -1,0 +1,30 @@
+version: 2
+
+models:
+  - name: circuit
+    description: "Circuit/tracks information, copied from jolpica.circuit"
+
+    columns:
+      - name: id
+        description: "Primary key"
+        tests:
+          - unique
+          - not_null
+      - name: name
+        description: "Circuit name"
+      - name: reference
+        description: "Circuit reference code"
+      - name: locality
+        description: "City/locality"
+      - name: country
+        description: "Country name"
+      - name: country_code
+        description: "ISO country code"
+      - name: latitude
+        description: "Latitude coordinate"
+      - name: longitude
+        description: "Longitude coordinate"
+      - name: altitude
+        description: "Altitude in meters"
+      - name: wikipedia
+        description: "Wikipedia page URL"

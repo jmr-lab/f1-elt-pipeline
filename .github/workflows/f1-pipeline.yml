@@ -164,14 +164,6 @@ jobs:
           echo "jolpica.db size: $(stat -c %s dist/jolpica.db) bytes"
           echo "Tables: $(sqlite3 dist/jolpica.db ".tables" | tr ' ' '\n' | wc -l)"
       
-      - name: Build formula1.db (transform)
-        working-directory: dist
-        run: |
-          # Delete formula1.db
-          rm -f formula1.db
-          # Run transform SQL (reads from jolpica.db, writes to formula1.db)
-          sqlite3 formula1.db < ../dbt/migrations/transform-tables.sql
-      
       - name: Initialise dbt profile
         run: |
           mkdir -p ~/.dbt
@@ -197,6 +189,7 @@ jobs:
       - name: Build formula1.db with dbt
         working-directory: dbt
         run: |
+          rm -f ${GITHUB_WORKSPACE}/dist/formula1.db
           dbt seed
           dbt run
 

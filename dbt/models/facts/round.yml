@@ -26,8 +26,6 @@ models:
               field: id
       - name: number
         description: "Round number"
-        tests:
-          - unique  # Combined with season_id via model-level test below
       - name: name
         description: "Event name"
         tests:

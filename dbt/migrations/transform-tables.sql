@@ -10,7 +10,7 @@ ATTACH DATABASE 'jolpica.db' AS jolpica;
 -- ============================================================
 -- PART 2: DROP EXISTING OBJECTS (main schema ONLY)
 -- ============================================================
-DROP TABLE IF EXISTS main.season;
+-- DROP TABLE IF EXISTS main.season;
 DROP TABLE IF EXISTS main.circuit;
 DROP TABLE IF EXISTS main.driver;
 DROP TABLE IF EXISTS main.constructor;
@@ -35,12 +35,12 @@ DROP TABLE IF EXISTS main.constructor_base;
 -- PART 3: CREATE DIMENSION TABLES
 -- ============================================================
 
-CREATE TABLE IF NOT EXISTS season (
-    id INTEGER PRIMARY KEY,
-    year INTEGER UNIQUE NOT NULL,
-    championship_system_id INTEGER,
-    wikipedia TEXT
-);
+-- CREATE TABLE IF NOT EXISTS season (
+--     id INTEGER PRIMARY KEY,
+--     year INTEGER UNIQUE NOT NULL,
+--     championship_system_id INTEGER,
+--     wikipedia TEXT
+-- );
 
 CREATE TABLE IF NOT EXISTS circuit (
     id INTEGER PRIMARY KEY,
@@ -328,8 +328,8 @@ CREATE TABLE IF NOT EXISTS countries (
 -- ============================================================
 
 -- Migrate Season (no api_id)
-INSERT INTO season (id, year, championship_system_id, wikipedia)
-SELECT id, year, championship_system_id, wikipedia FROM jolpica.season;
+-- INSERT INTO season (id, year, championship_system_id, wikipedia)
+-- SELECT id, year, championship_system_id, wikipedia FROM jolpica.season;
 
 -- Migrate Circuit (no api_id)
 INSERT INTO circuit (id, name, reference, locality, country, country_code,

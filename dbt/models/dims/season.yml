@@ -17,9 +17,9 @@ models:
           - not_null
       - name: championship_system_id
         description: "FK to championship_system"
-#        tests:
-#          - relationships:
-#              to: ref('championship_system')
-#              field: id
+        tests:
+          - relationships:
+              to: ref('championship_system')
+              field: id
       - name: wikipedia
         description: "Wikipedia page URL"

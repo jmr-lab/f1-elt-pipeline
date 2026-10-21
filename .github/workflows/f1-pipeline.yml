@@ -172,25 +172,6 @@ jobs:
           # Run transform SQL (reads from jolpica.db, writes to formula1.db)
           sqlite3 formula1.db < ../dbt/migrations/transform-tables.sql
       
-      - name: Upload formula1.db
-        uses: actions/upload-artifact@v4
-        with:
-          name: formula1-db
-          path: dist/formula1.db
-          retention-days: 7
-      
-      - name: Verify formula1.db contents
-        working-directory: dist
-        run: |
-          echo "=== Tables in formula1.db ==="
-          sqlite3 formula1.db "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"
-          echo ""
-          echo "=== Views in formula1.db ==="
-          sqlite3 formula1.db "SELECT name FROM sqlite_master WHERE type='view';"
-          echo ""
-          echo "=== Row counts ==="
-          sqlite3 formula1.db "SELECT 'season', COUNT(*) FROM season UNION ALL SELECT 'driver', COUNT(*) FROM driver UNION ALL SELECT 'lap', COUNT(*) FROM lap;"
-
       - name: Initialise dbt profile
         run: |
           mkdir -p ~/.dbt
@@ -213,9 +194,12 @@ jobs:
         working-directory: dbt
         run: dbt debug
       
-      - name: Run dbt models
+      - name: Build formula1.db with dbt
         working-directory: dbt
-        run: dbt run
+        run: |
+          rm -f ${GITHUB_WORKSPACE}/dist/formula1.db
+          dbt seed
+          dbt run
       
       - name: Run dbt tests
         working-directory: dbt
@@ -231,6 +215,25 @@ jobs:
           name: dbt-docs
           path: dbt/target/
           retention-days: 30
+
+      - name: Upload formula1.db
+        uses: actions/upload-artifact@v4
+        with:
+          name: formula1-db
+          path: dist/formula1.db
+          retention-days: 7
+      
+      - name: Verify formula1.db contents
+        working-directory: dist
+        run: |
+          echo "=== Tables in formula1.db ==="
+          sqlite3 formula1.db "SELECT name FROM sqlite_master WHERE type='table' ORDER BY name;"
+          echo ""
+          echo "=== Views in formula1.db ==="
+          sqlite3 formula1.db "SELECT name FROM sqlite_master WHERE type='view';"
+          echo ""
+          echo "=== Row counts ==="
+          sqlite3 formula1.db "SELECT 'season', COUNT(*) FROM season UNION ALL SELECT 'driver', COUNT(*) FROM driver UNION ALL SELECT 'lap', COUNT(*) FROM lap;"
       
       - name: Create release
         uses: ncipollo/release-action@v1

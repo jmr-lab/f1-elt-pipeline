@@ -233,9 +233,8 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           mkdir -p dist
           git add -f dist/formula1.db
-          git commit -m "Update formula1.db [skip ci]" || echo "Nothing to commit"
-          git pull --rebase origin main || echo "No upstream changes to rebase"
-          git push
+          git commit -m "Update formula1.db [skip ci]" 2>/dev/null || true
+          git push --force-with-lease origin main 2>/dev/null || true
 
       - name: Create release
         uses: ncipollo/release-action@v1

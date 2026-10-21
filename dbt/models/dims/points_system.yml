@@ -1,0 +1,34 @@
+version: 2
+
+models:
+  - name: points_system
+    description: "Points allocation rules, copied from jolpica.points_system"
+
+    columns:
+      - name: id
+        description: "Primary key"
+        tests:
+          - unique
+          - not_null
+      - name: name
+        description: "Points system name"
+      - name: reference
+        description: "Reference code"
+        tests:
+          - unique
+      - name: partial
+        description: "Partial season flag"
+      - name: driver_position_points
+        description: "Driver position points"
+      - name: driver_fastest_lap
+        description: "Fastest lap bonus for drivers"
+      - name: team_position_points
+        description: "Team position points"
+      - name: team_fastest_lap
+        description: "Fastest lap bonus for teams"
+      - name: shared_drive
+        description: "Shared drive allowance"
+      - name: is_double_points
+        description: "Double points flag"
+      - name: api_id
+        description: "Jolpica API identifier"

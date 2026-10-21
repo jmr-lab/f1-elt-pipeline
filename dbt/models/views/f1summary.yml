@@ -2,10 +2,11 @@ version: 2
 
 models:
   - name: f1summary
-    description: "Summary of F1 race results by driver with standings context (dbt-built twin of f1summary)"
+    description: "Denormalised race results view joining session entries to drivers, constructors, seasons and championship points"
     meta:
       owner: "jmr-lab"
       refresh_schedule: "weekly"
+
     columns:
       - name: resultId
         description: "Unique session entry identifier"
@@ -25,13 +26,13 @@ models:
       - name: rank
         description: "Fastest lap rank"
       - name: status
-        description: "Race finish status (Finished, Lapsed, Abandoned, etc.)"
+        description: "Derived race finish status (Finished, Lapsed, Not Qualified, Abandoned)"
       - name: year
         description: "Season year (excludes current year)"
       - name: round
         description: "Round number within the season"
       - name: circuit
-        description: "Circuit/event name"
+        description: "Event name"
       - name: driverName
         description: "Driver's full name"
         tests:
@@ -41,10 +42,18 @@ models:
       - name: constructorName
         description: "Constructor/team name"
       - name: driverCountry
-        description: "Driver's country"
+        description: "Driver's nationality for that season"
       - name: constructorCountry
-        description: "Constructor's country"
+        description: "Constructor's nationality for that season"
       - name: driverImage
-        description: "Path to driver's country flag icon"
+        description: "Path to driver's nationality flag icon"
       - name: constructorImage
-        description: "Path to constructor's country flag icon"
+        description: "Path to constructor's nationality flag icon"
+      - name: engineId
+        description: "FK to engine"
+      - name: engineReference
+        description: "Engine reference code"
+      - name: engineName
+        description: "Engine manufacturer name"
+      - name: engineNationality
+        description: "Engine manufacturer nationality"

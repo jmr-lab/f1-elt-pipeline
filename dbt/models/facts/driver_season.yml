@@ -1,0 +1,32 @@
+version: 2
+
+models:
+  - name: driver_season
+    description: "Driver nationality per season (temporal tracking), derived from jolpica.team_driver joined to jolpica.driver"
+
+    columns:
+      - name: id
+        description: "Surrogate primary key (generated row number)"
+        tests:
+          - unique
+          - not_null
+      - name: driver_id
+        description: "FK to driver"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('driver')
+              field: id
+      - name: season_id
+        description: "FK to season"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('season')
+              field: id
+      - name: nationality
+        description: "Nationality for that season"
+        tests:
+          - not_null
+      - name: country_code
+        description: "ISO country code"

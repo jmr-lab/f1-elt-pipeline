@@ -19,8 +19,6 @@ models:
               field: id
       - name: number
         description: "Lap number"
-        tests:
-          - not_null
       - name: position
         description: "Position on lap"
       - name: time

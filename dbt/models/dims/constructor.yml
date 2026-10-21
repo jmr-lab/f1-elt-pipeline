@@ -1,0 +1,31 @@
+version: 2
+
+models:
+  - name: constructor
+    description: "Constructor/team master data, renamed from jolpica.team"
+
+    columns:
+      - name: id
+        description: "Primary key"
+        tests:
+          - unique
+          - not_null
+      - name: name
+        description: "Constructor name"
+        tests:
+          - not_null
+      - name: reference
+        description: "Constructor reference code"
+        tests:
+          - unique
+          - not_null
+      - name: constructor_base_id
+        description: "FK to constructor_base for team lineage"
+        tests:
+          - relationships:
+              to: ref('constructor_base')
+              field: id
+      - name: primary_color
+        description: "Primary constructor color"
+      - name: wikipedia
+        description: "Wikipedia page URL"

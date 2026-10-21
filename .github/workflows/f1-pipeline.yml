@@ -196,8 +196,10 @@ jobs:
       
       - name: Build formula1.db with dbt
         working-directory: dbt
-        run: dbt run
-      
+        run: |
+          dbt seed
+          dbt run
+
       - name: Run dbt tests
         working-directory: dbt
         run: dbt test

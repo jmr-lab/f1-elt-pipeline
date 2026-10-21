@@ -196,10 +196,7 @@ jobs:
       
       - name: Build formula1.db with dbt
         working-directory: dbt
-        run: |
-          rm -f ${GITHUB_WORKSPACE}/dist/formula1.db
-          dbt seed
-          dbt run
+        run: dbt run
       
       - name: Run dbt tests
         working-directory: dbt

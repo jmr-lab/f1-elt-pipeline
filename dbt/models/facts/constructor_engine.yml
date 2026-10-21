@@ -1,0 +1,35 @@
+version: 2
+
+models:
+  - name: constructor_engine
+    description: "Constructor-engine relationships per season, resolved from a hardcoded mapping against constructor, engine and season models"
+
+    columns:
+      - name: id
+        description: "Surrogate primary key (generated row number)"
+        tests:
+          - unique
+          - not_null
+      - name: constructor_id
+        description: "FK to constructor"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('constructor')
+              field: id
+      - name: season_id
+        description: "FK to season"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('season')
+              field: id
+      - name: engine_id
+        description: "FK to engine"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('engine')
+              field: id
+      - name: engine_ref_override
+        description: "Optional override for custom entries (always NULL currently)"

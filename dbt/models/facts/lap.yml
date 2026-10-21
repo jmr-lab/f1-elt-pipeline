@@ -1,0 +1,33 @@
+version: 2
+
+models:
+  - name: lap
+    description: "Per-lap data, renamed from jolpica.lap"
+
+    columns:
+      - name: id
+        description: "Primary key"
+        tests:
+          - unique
+          - not_null
+      - name: session_entry_id
+        description: "FK to session_entry"
+        tests:
+          - not_null
+          - relationships:
+              to: ref('session_entry')
+              field: id
+      - name: number
+        description: "Lap number"
+        tests:
+          - not_null
+      - name: position
+        description: "Position on lap"
+      - name: time
+        description: "Lap time"
+      - name: average_speed
+        description: "Average speed"
+      - name: is_fastest_lap
+        description: "Fastest lap flag (renamed from is_entry_fastest_lap)"
+      - name: is_deleted
+        description: "Deleted flag"

@@ -1,0 +1,24 @@
+version: 2
+
+models:
+  - name: penalty
+    description: "Driver penalties, renamed from jolpica.penalty"
+
+    columns:
+      - name: id
+        description: "Primary key"
+        tests:
+          - unique
+          - not_null
+      - name: earned_session_entry_id
+        description: "FK to session_entry (where penalty was earned, renamed from earned_id)"
+      - name: served_session_entry_id
+        description: "FK to session_entry (where penalty was served, renamed from served_id)"
+      - name: position
+        description: "Penalty position"
+      - name: license_points
+        description: "License points"
+      - name: is_time_served_in_pit
+        description: "In-pit flag"
+      - name: time
+        description: "Penalty time"

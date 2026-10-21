@@ -1,0 +1,27 @@
+version: 2
+
+seeds:
+  - name: engine
+    description: "Engine/power unit manufacturers (static reference data, migrated from transform-tables.sql)"
+
+    columns:
+      - name: id
+        description: "Primary key"
+        tests:
+          - unique
+          - not_null
+      - name: name
+        description: "Engine manufacturer name"
+        tests:
+          - not_null
+      - name: reference
+        description: "Reference code"
+        tests:
+          - unique
+          - not_null
+      - name: nationality
+        description: "Manufacturer nationality"
+      - name: founded_year
+        description: "Year founded"
+      - name: wikipedia
+        description: "Wikipedia page URL"

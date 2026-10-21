@@ -226,7 +226,16 @@ jobs:
           echo ""
           echo "=== Row counts ==="
           sqlite3 formula1.db "SELECT 'season', COUNT(*) FROM season UNION ALL SELECT 'driver', COUNT(*) FROM driver UNION ALL SELECT 'lap', COUNT(*) FROM lap;"
-      
+
+      - name: Commit formula1.db
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          mkdir -p dist
+          git add -f dist/formula1.db
+          git commit -m "Update formula1.db [skip ci]" || echo "Nothing to commit"
+          git push      
+
       - name: Create release
         uses: ncipollo/release-action@v1
         with:

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 import json
 
-c = json.load(open('dbt/target/catalog.json'))
+c = json.load(open('target/catalog.json'))
 
 print("=== Column types from catalog ===")
 for name in ['lap', 'session_entry', 'round', 'session']:

@@ -12,10 +12,19 @@ models:
           connections:
             - diagram: formula1_erd
               target: season
+              source_cardinality: one_or_more
+              target_cardinality: one
+              label: active in
             - diagram: formula1_erd
               target: constructor
+              source_cardinality: one_or_more
+              target_cardinality: one
+              label: drives for
             - diagram: formula1_erd
               target: driver
+              source_cardinality: one_or_more
+              target_cardinality: one
+              label: driven by
 
     columns:
       - name: id

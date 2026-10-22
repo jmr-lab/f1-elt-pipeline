@@ -1,0 +1,57 @@
+erDiagram
+    SEASON ||--o{ ROUND : contains
+    CIRCUIT ||--o{ ROUND : hosts
+    ROUND ||--o{ SESSION : has
+    ROUND ||--o{ ROUND_ENTRY : entries
+    SESSION ||--o{ SESSION_ENTRY : results
+    SESSION_ENTRY ||--o{ LAP : records
+    CONSTRUCTOR_DRIVER ||--o{ SESSION_ENTRY : entries
+    CONSTRUCTOR_DRIVER ||--o{ SEASON : active_in
+    CONSTRUCTOR_DRIVER ||--o{ CONSTRUCTOR : drives_for
+    CONSTRUCTOR_DRIVER ||--o{ DRIVER : driven_by
+
+    SEASON {
+        integer id PK
+        integer year
+    }
+    CIRCUIT {
+        integer id PK
+        text name
+        text country
+    }
+    ROUND {
+        integer id PK
+        integer season_id FK
+        integer circuit_id FK
+    }
+    SESSION {
+        integer id PK
+        integer round_id FK
+        text type
+    }
+    SESSION_ENTRY {
+        integer id PK
+        integer session_id FK
+        integer round_entry_id FK
+        integer position
+    }
+    LAP {
+        integer id PK
+        integer session_entry_id FK
+        integer number
+    }
+    CONSTRUCTOR_DRIVER {
+        integer id PK
+        integer season_id FK
+        integer constructor_id FK
+        integer driver_id FK
+    }
+    CONSTRUCTOR {
+        integer id PK
+        text name
+    }
+    DRIVER {
+        integer id PK
+        text given_name
+        text family_name
+    }

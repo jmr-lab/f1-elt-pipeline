@@ -2,7 +2,24 @@ version: 2
 
 models:
   - name: round_entry
-    description: "Entry list per race, renamed from jolpica.roundentry"
+    description: |
+      Entry list per race, renamed from jolpica.roundentry
+
+      ```mermaid[erd="formula1_erd"]```
+    config:
+      meta:
+        erd:
+          connections:
+            - diagram: formula1_erd
+              target: round
+              source_cardinality: one_or_more
+              target_cardinality: one
+              label: entered in
+            - diagram: formula1_erd
+              target: constructor_driver
+              source_cardinality: one_or_more
+              target_cardinality: one
+              label: assigns
 
     columns:
       - name: id

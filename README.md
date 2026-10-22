@@ -5,7 +5,7 @@
 [![Language](https://img.shields.io/badge/language-Python-blue.svg)](https://www.python.org/)
 [![dbt](https://img.shields.io/badge/dbt-v1.9-orange.svg)](https://www.getdbt.com/)
 [![Databricks](https://img.shields.io/badge/Databricks-Published-green?logo=databricks)](https://www.databricks.com/)
-[![dbt Documentation](https://img.shields.io/badge/dbt_docs-pages-green)](https://jmr-lab.github.io/f1-etl-pipeline/)
+[![dbt Documentation](https://img.shields.io/badge/dbt_docs-pages-green)](https://jmr-lab.github.io/f1-elt-pipeline/)
 
 An ELT pipeline that downloads the official F1 database dump from [Jolpica](https://api.jolpi.ca/) and transforms it into an analytics-ready dataset for Formula 1 analytics and driver GOAT analysis. Built with Python and [dbt](https://www.getdbt.com/) for modular, production-grade data transformations, with an optional publish step that mirrors the raw dataset into Databricks for interactive exploration.
 
@@ -147,12 +147,6 @@ Authentication uses a personal access token supplied through the DATABRICKS_TOKE
 f1-etl-pipeline/
 ├── .github/workflows/
 │   └── f1-etl-pipeline.yml        # CI/CD orchestration
-├── src/
-│   ├── 01-extract.py              # Download & unpack Jolpica CSVs
-│   ├── 02-load.py                 # Build SQLite star schema DB
-│   ├── 04-publish-databricks.py   # Publish raw tables to Databricks
-│   └── resources/
-│       └── countries_lookup.csv   # Country code → name mapping
 ├── dbt/
 │   ├── dbt_project.yml            # dbt project configuration
 │   ├── migrations/
@@ -162,8 +156,18 @@ f1-etl-pipeline/
 ├── dist/
 │   ├── jolpica.db                 # Raw star schema DB (committed)
 │   └── formula1.db                # Transformed DB with views (build artefact)
+├── docs/
+│   └── formula1_erd.mmd           # ERD source (Mermaid)
 ├── output/
 │   └── extracted_data.pkl         # Intermediate pickle (workflow only)
+├── scripts/
+│   └── build_erd_page.py          # Wraps ERD into dbt docs site
+├── src/
+│   ├── 01-extract.py              # Download & unpack Jolpica CSVs
+│   ├── 02-load.py                 # Build SQLite star schema DB
+│   ├── 04-publish-databricks.py   # Publish raw tables to Databricks
+│   └── resources/
+│       └── countries_lookup.csv   # Country code → name mapping
 └── README.md
 ```
 
@@ -174,12 +178,30 @@ f1-etl-pipeline/
 | jolpica.db | dist/ | Normalised raw SQLite database (19 tables)
 | formula1.db | dist/ | Transformed SQLite database with f1summary VIEW
 | dbt docs | GitHub Pages | Generated documentation and lineage graph
+| ERD | GitHub Pages | Entity-relationship diagram of the transformed schema
 
 The database is distributed via:
 1. **GitHub Releases** — Tagged as data-latest, downloadable from releases page
 2. **Workflow Artefacts** — Available for 7 days after each run
 
 ## Database Schema
+
+Core relationships in the transformed `formula1.db` — full diagram with all tables and columns: **[ERD](https://jmr-lab.github.io/f1-elt-pipeline/erd.html)**
+
+```mermaid
+erDiagram
+    SEASON ||--o{ ROUND : contains
+    CIRCUIT ||--o{ ROUND : hosts
+    ROUND ||--o{ SESSION : has
+    ROUND ||--o{ ROUND_ENTRY : entries
+    SESSION ||--o{ SESSION_ENTRY : results
+    ROUND_ENTRY ||--o{ SESSION_ENTRY : results
+    SESSION_ENTRY ||--o{ LAP : records
+    SEASON ||--o{ CONSTRUCTOR_DRIVER : active_in
+    CONSTRUCTOR ||--o{ CONSTRUCTOR_DRIVER : drives_for
+    DRIVER ||--o{ CONSTRUCTOR_DRIVER : driven_by
+    CONSTRUCTOR_DRIVER ||--o{ ROUND_ENTRY : assigns
+```
 
 ### Dimension Tables:
 | Table | Rows | Purpose |

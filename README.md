@@ -204,30 +204,30 @@ erDiagram
 ```
 
 ### Dimension Tables:
-| Table | Rows | Purpose |
-| ----- | --- | ----------- |
-| season | 77 | Racing seasons (1950–present) |
-| driver | 881 | Driver profiles |
-| team | 214 | Constructor records |
-| circuit | 78 | Track locations |
-| base_team | 0 | Team inheritance (empty) |
+| Table | Purpose |
+| ----- | ----------- |
+| season | Racing seasons (1950–present) |
+| driver | Driver profiles |
+| team | Constructor records |
+| circuit | Track locations |
+| base_team | Team inheritance (empty) |
 
 ### Fact Tables:
-| Table | Rows | Purpose |
-| ----- | --- | ----------- |
-| session_entry | 51,278 | Race results (primary fact) |
-| lap | 726,665 | Per-lap timing data |
-| pit_stop | 12,842 | Pit stop durations |
-| driver_championship | 36,386 | Standings snapshots |
-| team_championship | 14,348 | Constructor standings |
+| Table | Purpose |
+| ----- | ----------- |
+| session_entry | Race results (primary fact) |
+| lap | Per-lap timing data |
+| pit_stop | Pit stop durations |
+| driver_championship | Standings snapshots |
+| team_championship | Constructor standings |
 
 ### Supporting Tables:
-| Table | Rows | Purpose |
-| ----- | --- | ----------- |
-| round | 1,173 | Race events |
-| session | 5,130 | Practice/Qualifying/Race sessions |
-| roundentry | 27,597 | Driver-team-Race assignments |
-| team_driver | 3,630 | Driver-team contracts |
+| Table | Purpose |
+| ----- | ----------- |
+| round | Race events |
+| session | Practice/Qualifying/Race sessions |
+| roundentry | Driver-team-Race assignments |
+| team_driver | Driver-team contracts |
 
 ## The f1summary View
 

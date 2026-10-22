@@ -2,7 +2,8 @@ version: 2
 
 models:
   - name: lap
-    description: "Per-lap data, renamed from jolpica.lap"
+    description: |
+      Per-lap data, renamed from jolpica.lap
 
       ```mermaid[erd="formula1_erd"]```
     config:

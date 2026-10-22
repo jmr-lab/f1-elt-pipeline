@@ -200,6 +200,10 @@ jobs:
       - name: Generate dbt documentation
         working-directory: dbt
         run: dbt-diagrams docs generate
+
+      - name: Debug ERD column types
+        working-directory: dbt
+        run: python3 scripts/debug_types.py
       
       - name: Upload dbt docs artifact
         uses: actions/upload-artifact@v4

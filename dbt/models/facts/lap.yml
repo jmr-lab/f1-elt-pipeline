@@ -2,19 +2,7 @@ version: 2
 
 models:
   - name: lap
-    description: |
-      Per-lap data, renamed from jolpica.lap
-
-      ```mermaid[erd="formula1_erd"]```
-    config:
-      meta:
-        erd:
-          connections:
-            - diagram: formula1_erd
-              target: session_entry
-              source_cardinality: one_or_more
-              target_cardinality: one
-              label: recorded for
+    description: Per-lap data, renamed from jolpica.lap
 
     columns:
       - name: id

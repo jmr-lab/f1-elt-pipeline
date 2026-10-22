@@ -2,7 +2,24 @@ version: 2
 
 models:
   - name: session
-    description: "Race sessions (practice, qualifying, race, sprint), copied from jolpica.session"
+    description: |
+      Race sessions (practice, qualifying, race, sprint), copied from jolpica.session
+
+      ```mermaid[erd="formula1_erd"]```
+    config:
+      meta:
+        erd:
+          connections:
+            - diagram: formula1_erd
+              target: round
+              source_cardinality: one_or_more
+              target_cardinality: one
+              label: belongs to
+            - diagram: formula1_erd
+              target: points_system
+              source_cardinality: one_or_more
+              target_cardinality: one
+              label: uses
 
     columns:
       - name: id

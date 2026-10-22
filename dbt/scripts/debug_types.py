@@ -14,7 +14,7 @@ for name in ['lap', 'session_entry', 'round', 'session']:
             break
 
 print("\n=== ERD snippet from index.html ===")
-html = open('dbt/target/index.html').read()
+html = open('target/index.html').read()
 if 'erDiagram' in html:
     idx = html.index('erDiagram')
     print(html[idx:idx+1500])

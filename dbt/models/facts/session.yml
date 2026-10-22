@@ -12,14 +12,8 @@ models:
           connections:
             - diagram: formula1_erd
               target: round
-              source_cardinality: one_or_more
-              target_cardinality: one
-              label: belongs to
             - diagram: formula1_erd
               target: points_system
-              source_cardinality: one_or_more
-              target_cardinality: one
-              label: uses
 
     columns:
       - name: id

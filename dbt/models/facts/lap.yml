@@ -15,15 +15,6 @@ models:
               source_cardinality: one_or_more
               target_cardinality: one
               label: recorded for
-              columns:
-                - name: id
-                  description: Primary key
-                - name: session_entry_id
-                  description: FK to session_entry
-                - name: number
-                  description: Lap number
-                - name: position
-                  description: Position on lap
 
     columns:
       - name: id

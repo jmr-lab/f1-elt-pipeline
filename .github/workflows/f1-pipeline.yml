@@ -201,9 +201,8 @@ jobs:
         working-directory: dbt
         run: dbt-diagrams docs generate
 
-      - name: Debug ERD column types
-        working-directory: dbt
-        run: python3 scripts/debug_types.py
+      - name: Render ERD page
+        run: python3 scripts/build_erd_page.py docs/formula1_erd.mmd dbt/target/erd.html
       
       - name: Upload dbt docs artifact
         uses: actions/upload-artifact@v4

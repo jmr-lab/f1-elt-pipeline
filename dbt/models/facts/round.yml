@@ -12,8 +12,14 @@ models:
           connections:
             - diagram: formula1_erd
               target: season
+              source_cardinality: one_or_more
+              target_cardinality: one
+              label: occurs in
             - diagram: formula1_erd
               target: circuit
+              source_cardinality: one_or_more
+              target_cardinality: one
+              label: held at
 
     columns:
       - name: id

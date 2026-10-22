@@ -129,7 +129,7 @@ jobs:
       
       - name: Install dbt dependencies
         run: |
-          pip install "dbt-core==1.9.1" "dbt-sqlite==1.9.1" dbt-docs
+          pip install "dbt-core==1.9.1" "dbt-sqlite==1.9.1" dbt-docs dbt-diagrams          
       
       - name: Download jolpica.db
         uses: actions/download-artifact@v4
@@ -199,7 +199,7 @@ jobs:
       
       - name: Generate dbt documentation
         working-directory: dbt
-        run: dbt docs generate
+        run: dbt-diagrams docs generate
       
       - name: Upload dbt docs artifact
         uses: actions/upload-artifact@v4

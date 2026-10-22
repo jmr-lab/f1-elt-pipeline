@@ -2,7 +2,29 @@ version: 2
 
 models:
   - name: constructor_driver
-    description: "Constructor-driver assignments per season, renamed from jolpica.team_driver"
+    description: |
+      Constructor-driver assignments per season, renamed from jolpica.team_driver
+
+      ```mermaid[erd="formula1_erd"]```
+    config:
+      meta:
+        erd:
+          connections:
+            - diagram: formula1_erd
+              target: season
+              source_cardinality: one_or_more
+              target_cardinality: one
+              label: active in
+            - diagram: formula1_erd
+              target: constructor
+              source_cardinality: one_or_more
+              target_cardinality: one
+              label: drives for
+            - diagram: formula1_erd
+              target: driver
+              source_cardinality: one_or_more
+              target_cardinality: one
+              label: driven by
 
     columns:
       - name: id

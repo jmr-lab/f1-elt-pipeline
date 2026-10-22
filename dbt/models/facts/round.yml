@@ -2,24 +2,7 @@ version: 2
 
 models:
   - name: round
-    description: |
-      Race rounds/events, copied from jolpica.round
-
-      ```mermaid[erd="formula1_erd"]```
-    config:
-      meta:
-        erd:
-          connections:
-            - diagram: formula1_erd
-              target: season
-              source_cardinality: one_or_more
-              target_cardinality: one
-              label: occurs in
-            - diagram: formula1_erd
-              target: circuit
-              source_cardinality: one_or_more
-              target_cardinality: one
-              label: held at
+    description: Race rounds/events, copied from jolpica.round
 
     columns:
       - name: id

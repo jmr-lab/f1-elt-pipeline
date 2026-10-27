@@ -2,26 +2,25 @@ version: 2
 
 sources:
   - name: jolpica
-    description: "Raw F1 data from the Jolpica API, loaded by src/02-load.py"
+    description: "Raw jolpica Formula 1 database (read-only source)."
     schema: jolpica
-    loader: "src/02-load.py"
-
     tables:
-      - name: season
+      - name: _countries_lookup
+      - name: base_team
+      - name: championship_adjustment
+      - name: championship_system
       - name: circuit
       - name: driver
-      - name: team
+      - name: driver_championship
+      - name: lap
+      - name: penalty
+      - name: pit_stop
+      - name: points_system
       - name: round
-      - name: team_driver
       - name: roundentry
+      - name: season
       - name: session
       - name: session_entry
-      - name: driver_championship
+      - name: team
       - name: team_championship
-      - name: lap
-      - name: pit_stop
-      - name: penalty
-      - name: base_team
-      - name: points_system
-      - name: championship_system
-      - name: _countries_lookup
+      - name: team_driver

@@ -1,4 +1,4 @@
-name: 'f1_etl'
+name: 'f1_elt'
 version: '1.0.0'
 config-version: 2
 
@@ -15,9 +15,9 @@ clean-targets:
   - "dbt_packages"
 
 models:
-  f1_etl:
+  f1_elt:
     +materialized: table
 
 seeds:
-  f1_etl:
+  f1_elt:
     +quote_columns: false

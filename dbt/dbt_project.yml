@@ -1,16 +1,23 @@
-name: 'f1_etl'
+name: 'jolpica_f1'
 version: '1.0.0'
-profile: 'sqlite'
+config-version: 2
 
-# Paths
+profile: 'jolpica_f1'
+
 model-paths: ["models"]
-analysis-paths: ["analyses"]
-test-paths: ["tests"]
 seed-paths: ["seeds"]
 macro-paths: ["macros"]
-snapshot-paths: ["snapshots"]
-
+test-paths: ["tests"]
+analysis-paths: ["analyses"]
 target-path: "target"
 clean-targets:
   - "target"
   - "dbt_packages"
+
+models:
+  jolpica_f1:
+    +materialized: table
+
+seeds:
+  jolpica_f1:
+    +quote_columns: false

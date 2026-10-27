@@ -2,7 +2,7 @@ name: 'f1_etl'
 version: '1.0.0'
 config-version: 2
 
-profile: 'sqllite'
+profile: 'sqlite'
 
 model-paths: ["models"]
 seed-paths: ["seeds"]
@@ -15,9 +15,9 @@ clean-targets:
   - "dbt_packages"
 
 models:
-  jolpica_f1:
+  f1_etl:
     +materialized: table
 
 seeds:
-  jolpica_f1:
+  f1_etl:
     +quote_columns: false

@@ -1,0 +1,164 @@
+version: 2
+
+models:
+  - name: countries
+    description: "Country lookup with a surrogate id starting at 1."
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: country_code
+        tests: [unique, not_null]
+
+  - name: base_team
+    columns:
+      - name: id
+        tests: [unique, not_null]
+
+  - name: driver
+    description: "Drivers with api_id and nationality removed; date_of_birth cast to DATE."
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: reference
+        tests: [not_null]
+      - name: surname
+        tests: [not_null]
+
+  - name: team
+    description: "Constructors with api_id and nationality removed."
+    columns:
+      - name: id
+        tests: [unique, not_null]
+
+  - name: round
+    description: "Rounds with api_id removed and date cast to DATE."
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: season_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('season')
+              field: id
+      - name: circuit_id
+        tests:
+          - relationships:
+              to: ref('circuit')
+              field: id
+
+  - name: session
+    description: "Sessions with api_id removed and timestamp cast to TIMESTAMP."
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: round_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('round')
+              field: id
+
+  - name: session_entry
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: session_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('session')
+              field: id
+      - name: round_entry_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('roundentry')
+              field: id
+
+  - name: team_driver
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: season_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('season')
+              field: id
+      - name: driver_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('driver')
+              field: id
+      - name: team_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('team')
+              field: id
+
+  - name: season_driver
+    description: "One row per driver per season with the nationality that applied that season."
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: season_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('season')
+              field: id
+      - name: driver_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('driver')
+              field: id
+      - name: country_id
+        tests:
+          - relationships:
+              to: ref('countries')
+              field: id
+    tests:
+      - unique:
+          column_name: "(season_id || '-' || driver_id)"
+
+  - name: season_team
+    description: "One row per team per season with the nationality and name that applied that season."
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: season_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('season')
+              field: id
+      - name: team_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('team')
+              field: id
+      - name: country_id
+        tests:
+          - relationships:
+              to: ref('countries')
+              field: id
+    tests:
+      - unique:
+          column_name: "(season_id || '-' || team_id)"
+
+  - name: f1summary
+    description: "Race results enriched with driver and constructor nationality."
+    columns:
+      - name: resultId
+        tests: [unique, not_null]
+      - name: driverName
+        tests: [not_null]
+      - name: status
+        tests:
+          - accepted_values:
+              values: ['Finished', 'Disqualified', 'Not classified', 'Lapsed', 'Not Qualified', 'Abandoned']

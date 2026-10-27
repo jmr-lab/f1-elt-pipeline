@@ -1,8 +1,8 @@
-name: 'sqllite'
+name: 'f1_etl'
 version: '1.0.0'
 config-version: 2
 
-profile: 'jolpica_f1'
+profile: 'sqllite'
 
 model-paths: ["models"]
 seed-paths: ["seeds"]

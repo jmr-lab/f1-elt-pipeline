@@ -292,7 +292,96 @@ jobs:
           DATABRICKS_CATALOG: ${{ vars.DATABRICKS_CATALOG }}
           JOLPICA_SCHEMA: jolpica
         run: python src/04-publish-databricks.py
-  
+
+  dashboard_export:
+    name: Run dashboard job and publish HTML
+    needs: [publish_databricks]
+    runs-on: ubuntu-latest
+
+    # Required by GitHub Pages' official deployment actions.
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Trigger Databricks dashboard job and export HTML
+        env:
+          DATABRICKS_HOST: ${{ secrets.DATABRICKS_HOST }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          JOB_ID: ${{ vars.DATABRICKS_DASHBOARD_JOB_ID }}
+        run: |
+          set -euo pipefail
+
+          run_id=$(curl --fail --silent --show-error \
+            -X POST "$DATABRICKS_HOST/api/2.2/jobs/run-now" \
+            -H "Authorization: Bearer $DATABRICKS_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "{\"job_id\": $JOB_ID}" |
+            jq -er '.run_id')
+
+          echo "Started dashboard job run: $run_id"
+
+          # Wait up to 30 minutes for the Databricks job to finish.
+          for attempt in $(seq 1 120); do
+            run=$(curl --fail --silent --show-error --get \
+              "$DATABRICKS_HOST/api/2.2/jobs/runs/get" \
+              -H "Authorization: Bearer $DATABRICKS_TOKEN" \
+              --data-urlencode "run_id=$run_id")
+
+            life_cycle=$(echo "$run" | jq -r '.state.life_cycle_state')
+            result=$(echo "$run" | jq -r '.state.result_state // ""')
+
+            echo "Run state: $life_cycle $result"
+
+            if [ "$life_cycle" = "TERMINATED" ]; then
+              if [ "$result" != "SUCCESS" ]; then
+                echo "Dashboard job failed."
+                echo "$run" | jq '.state'
+                exit 1
+              fi
+              break
+            fi
+
+            if [ "$life_cycle" = "INTERNAL_ERROR" ] || [ "$life_cycle" = "SKIPPED" ]; then
+              echo "Dashboard job ended in state: $life_cycle"
+              exit 1
+            fi
+
+            if [ "$attempt" -eq 120 ]; then
+              echo "Timed out waiting for the Databricks job."
+              exit 1
+            fi
+
+            sleep 15
+          done
+
+          curl --fail --silent --show-error --get \
+            "$DATABRICKS_HOST/api/2.0/jobs/runs/export" \
+            -H "Authorization: Bearer $DATABRICKS_TOKEN" \
+            --data-urlencode "run_id=$run_id" \
+            --data-urlencode "views_to_export=DASHBOARDS" \
+            -o dashboard-export.json
+
+          mkdir -p site
+          jq -er '.views[] | select(.type == "DASHBOARD") | .content' \
+            dashboard-export.json > site/index.html
+
+          test -s site/index.html
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
+
   deploy_docs:
     runs-on: ubuntu-latest
     name: Deploy Documentation

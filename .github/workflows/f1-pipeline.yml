@@ -293,20 +293,13 @@ jobs:
           JOLPICA_SCHEMA: jolpica
         run: python src/04-publish-databricks.py
 
-  dashboard_export:
-    name: Run dashboard job and publish HTML
+  get_dashboard:
+    name: Get Dashboard
     needs: [publish_databricks]
     runs-on: ubuntu-latest
 
-    # Required by GitHub Pages' official deployment actions.
     permissions:
       contents: read
-      pages: write
-      id-token: write
-
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
       - name: Trigger Databricks dashboard job and export HTML
@@ -321,8 +314,18 @@ jobs:
           HOST="${HOST%/}"
           DATABRICKS_HOST="https://${HOST}"
 
+          if [[ -z "${HOST}" ]]; then
+            echo "DATABRICKS_SERVER_HOSTNAME is missing."
+            exit 1
+          fi
+
+          if [[ -z "${DATABRICKS_TOKEN:-}" ]]; then
+            echo "DATABRICKS_TOKEN is missing."
+            exit 1
+          fi
+
           if [[ -z "${JOB_ID:-}" || ! "$JOB_ID" =~ ^[0-9]+$ ]]; then
-            echo "JOB_ID is missing or is not numeric. Check the DATABRICKS_DASHBOARD_JOB_ID Actions variable."
+            echo "JOB_ID is missing or is not numeric."
             exit 1
           fi
 
@@ -384,49 +387,51 @@ jobs:
             dashboard-export.json > site/index.html
 
           test -s site/index.html
+          echo "Dashboard HTML exported to site/index.html"
 
-      - name: Upload GitHub Pages artifact
+      - name: Upload dashboard HTML artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dashboard-html
+          path: site/
+          if-no-files-found: error
+          retention-days: 7
+
+  deploy_docs:
+    runs-on: ubuntu-latest
+    name: Deploy Documentation and Dashboard
+    needs: [transform, get_dashboard]
+
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Download dbt docs
+        uses: actions/download-artifact@v4
+        with:
+          name: dbt-docs
+          path: site/dbt
+
+      - name: Download dashboard HTML
+        uses: actions/download-artifact@v4
+        with:
+          name: dashboard-html
+          path: site/dashboard
+
+      - name: Setup Pages
+        uses: actions/configure-pages@v4
+
+      - name: Upload combined Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: site
 
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
-
-  deploy_docs:
-    runs-on: ubuntu-latest
-    name: Deploy Documentation
-    needs: transform
-    if: always()
-    
-    permissions:
-      contents: write
-      pages: write
-      id-token: write
-    
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-      
-      - name: Download dbt docs artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: dbt-docs
-          path: dbt/target
-      
-      - name: Setup Pages
-        uses: actions/configure-pages@v4
-      
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: dbt/target
-      
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4

@@ -316,14 +316,26 @@ jobs:
           JOB_ID: ${{ vars.DATABRICKS_DASHBOARD_JOB_ID }}
         run: |
           set -euo pipefail
-          DATABRICKS_HOST="https://${DATABRICKS_SERVER_HOSTNAME}"
-          run_id=$(curl --fail --silent --show-error \
+
+          HOST="${DATABRICKS_SERVER_HOSTNAME#https://}"
+          HOST="${HOST%/}"
+          DATABRICKS_HOST="https://${HOST}"
+
+          if [[ -z "${JOB_ID:-}" || ! "$JOB_ID" =~ ^[0-9]+$ ]]; then
+            echo "JOB_ID is missing or is not numeric. Check the DATABRICKS_DASHBOARD_JOB_ID Actions variable."
+            exit 1
+          fi
+
+          echo "Triggering Databricks dashboard job..."
+          payload=$(jq -n --argjson job_id "$JOB_ID" '{job_id: $job_id}')
+
+          response=$(curl --silent --show-error --fail-with-body \
             -X POST "$DATABRICKS_HOST/api/2.2/jobs/run-now" \
             -H "Authorization: Bearer $DATABRICKS_TOKEN" \
             -H "Content-Type: application/json" \
-            -d "{\"job_id\": $JOB_ID}" |
-            jq -er '.run_id')
+            -d "$payload")
 
+          run_id=$(echo "$response" | jq -er '.run_id')
           echo "Started dashboard job run: $run_id"
 
           # Wait up to 30 minutes for the Databricks job to finish.

@@ -311,12 +311,12 @@ jobs:
     steps:
       - name: Trigger Databricks dashboard job and export HTML
         env:
-          DATABRICKS_HOST: ${{ secrets.DATABRICKS_SERVER_HOSTNAME }}
+          DATABRICKS_SERVER_HOSTNAME: ${{ secrets.DATABRICKS_SERVER_HOSTNAME }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
           JOB_ID: ${{ vars.DATABRICKS_DASHBOARD_JOB_ID }}
         run: |
           set -euo pipefail
-
+          DATABRICKS_HOST="https://${DATABRICKS_SERVER_HOSTNAME}"
           run_id=$(curl --fail --silent --show-error \
             -X POST "$DATABRICKS_HOST/api/2.2/jobs/run-now" \
             -H "Authorization: Bearer $DATABRICKS_TOKEN" \

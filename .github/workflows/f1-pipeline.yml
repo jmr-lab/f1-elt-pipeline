@@ -318,7 +318,7 @@ jobs:
           set -euo pipefail
 
           run_id=$(curl --fail --silent --show-error \
-            -X POST "$DATABRICKS_SERVER_HOSTNAME/api/2.2/jobs/run-now" \
+            -X POST "$DATABRICKS_HOST/api/2.2/jobs/run-now" \
             -H "Authorization: Bearer $DATABRICKS_TOKEN" \
             -H "Content-Type: application/json" \
             -d "{\"job_id\": $JOB_ID}" |
@@ -329,7 +329,7 @@ jobs:
           # Wait up to 30 minutes for the Databricks job to finish.
           for attempt in $(seq 1 120); do
             run=$(curl --fail --silent --show-error --get \
-              "$DATABRICKS_SERVER_HOSTNAME/api/2.2/jobs/runs/get" \
+              "$DATABRICKS_HOST/api/2.2/jobs/runs/get" \
               -H "Authorization: Bearer $DATABRICKS_TOKEN" \
               --data-urlencode "run_id=$run_id")
 
@@ -361,7 +361,7 @@ jobs:
           done
 
           curl --fail --silent --show-error --get \
-            "$DATABRICKS_SERVER_HOSTNAME/api/2.0/jobs/runs/export" \
+            "$DATABRICKS_HOST/api/2.0/jobs/runs/export" \
             -H "Authorization: Bearer $DATABRICKS_TOKEN" \
             --data-urlencode "run_id=$run_id" \
             --data-urlencode "views_to_export=DASHBOARDS" \

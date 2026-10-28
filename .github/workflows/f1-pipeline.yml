@@ -313,7 +313,7 @@ jobs:
         env:
           DATABRICKS_SERVER_HOSTNAME: ${{ secrets.DATABRICKS_SERVER_HOSTNAME }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
-          JOB_ID: ${{ vars.DATABRICKS_DASHBOARD_JOB_ID }}
+          JOB_ID: ${{ secrets.DATABRICKS_DASHBOARD_JOB_ID }}
         run: |
           set -euo pipefail
 

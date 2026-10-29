@@ -18,7 +18,10 @@ This ETL pipeline processes raw data from the Jolpica F1 database through four s
 > 
 > *   **Enhanced dbt transformations** — Additional derived metrics and staging layers.
 > *   **Incremental models** — Optimised refresh strategy for large historical datasets.
-> *   **Databricks-native transformations** — Moving the transform stage onto Databricks compute.
+
+## Project site
+
+[Explore the project on GitHub Pages](https://jmr-lab.github.io/f1-elt-pipeline/)
 
 ## Pipeline Architecture
 

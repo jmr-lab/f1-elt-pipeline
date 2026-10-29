@@ -412,6 +412,14 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Copy landing page
+        run: |
+          mkdir -p site
+          cp pages/index.html site/index.html
+
       - name: Download dbt docs
         uses: actions/download-artifact@v4
         with:

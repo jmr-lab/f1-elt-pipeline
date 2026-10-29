@@ -37,10 +37,12 @@ flowchart LR
 ```
 ### Pipeline Flow:
 
-1. **Extract** — Downloads the full Jolpica database dump (19 CSV tables) with automatic freshness checks
-2. **Load** — Builds the normalised SQLite star schema database (jolpica.db)
-3. **Transform** — Produces formula1.db from transform-tables.sql, then runs dbt tests and generates documentation
-4. **Publish** — Mirrors the raw tables into Databricks as Delta tables for interactive analysis
+1. **Extract** — Downloads the Jolpica database dump.
+2. **Load** — Builds the normalised SQLite database (`jolpica.db`).
+3. **Transform** — Builds `formula1.db`, runs dbt tests, and generates dbt documentation.
+4. **Publish to Databricks** — Uploads the Jolpica tables to Databricks as Delta tables.
+5. **Get dashboard** — Runs the separate Databricks dashboard job and exports its dashboard as HTML.
+6. **Deploy docs** — Combines the dbt docs, dashboard HTML, landing page, and converted README into one GitHub Pages site.
 
 ## Architectural Decisions & Trade-offs
 
@@ -71,17 +73,11 @@ Design decisions, their rationale, and deliberate omissions. Full records in [`d
 
 ## Workflow Execution
 
-The workflow consists of three jobs that execute sequentially:
+After extraction and loading, the workflow runs the transformation and Databricks publishing jobs independently. Once the Jolpica tables have been published to Databricks, the `get_dashboard` job triggers the dashboard export job and retrieves the exported HTML.
 
-```mermaid
-flowchart TD
-    extract["Extract<br/>Download Jolpica CSVs"] --> load["Load<br/>Build jolpica.db"]
-    load --> transform["Transform<br/>Build formula1.db + dbt"]
-    load --> publish["Publish<br/>Upload to Databricks"]
-    transform --> docs["Deploy Docs<br/>GitHub Pages"]
-```
+The `deploy_docs` job waits for both `transform` and `get_dashboard` to finish. It assembles the dbt documentation, dashboard HTML, and landing page into a single GitHub Pages artifact and deploys the combined site.
 
-Each job runs on its own Ubuntu runner. Intermediate artefacts are passed between jobs using GitHub Actions artefact storage.
+Each GitHub Actions job runs on its own Ubuntu runner. Intermediate files are passed between jobs using GitHub Actions artifacts.
 
 ## Triggers
 
@@ -92,13 +88,14 @@ The workflow runs:
 
 ## Job Dependencies
 
-| Job | Depends On | Produces |
-| ----- | --- | ----------- |
-| extract | None | output/extracted_data.pkl → extracted-data artefact |
-| load | extract | dist/jolpica.db → jolpica-db artefact, committed to the repository |
-| transform | load | dist/formula1.db → formula1-db artefact, dbt-docs artefact, data-latest release |
-| publish_databricks | load | 19 Delta tables in the Databricks jolpica schema |
-| deploy_docs | transform | dbt documentation site on GitHub Pages |
+| Job | Depends on | Produces |
+| --- | --- | --- |
+| `extract` | None | `output/extracted_data.pkl` → extracted-data artifact |
+| `load` | `extract` | `dist/jolpica.db` → jolpica-db artifact |
+| `transform` | `load` | `dist/formula1.db`, dbt documentation, and data release |
+| `publish_databricks` | `load` | Jolpica tables published as Delta tables in Databricks |
+| `get_dashboard` | `publish_databricks` | Exported Databricks dashboard HTML |
+| `deploy_docs` | `transform`, `get_dashboard` | Combined GitHub Pages site |
 
 ## Features
 
@@ -177,6 +174,8 @@ f1-etl-pipeline/
 | formula1.db | dist/ | Transformed SQLite database with f1summary VIEW
 | dbt docs | GitHub Pages | Generated documentation and lineage graph
 | ERD | GitHub Pages | Entity-relationship diagram of the transformed schema
+| Dashboard HTML | GitHub Pages | Exported Databricks dashboard |
+| GitHub Pages site | GitHub Pages | Landing page, dbt documentation and Databricks dashboard |
 
 The database is distributed via:
 1. **GitHub Releases** — Tagged as data-latest, downloadable from releases page

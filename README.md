@@ -24,18 +24,16 @@ This ETL pipeline processes raw data from the Jolpica F1 database through four s
 
 ```mermaid
 flowchart LR
-    A[Jolpica API] -->|CSV Dump| B(Extract)
-    B -->|pickle artifact| C(Load)
-    C -->|jolpica.db| D(Transform)
-    C -->|jolpica.db| F(Publish)
-    D -->|formula1.db| E[(GitHub Release)]
-    D -->|dbt docs| G[(GitHub Pages)]
-    F -->|Delta tables| H[(Databricks)]
-
-    B -->|Python| B
-    C -->|Python| C
-    D -->|dbt| D
-    F -->|Python| F
+    A[Jolpica API] -->|CSV dump| B[Extract]
+    B -->|pickle artifact| C[Load]
+    C -->|jolpica.db| D[Transform]
+    C -->|jolpica.db| F[Publish to Databricks]
+    D -->|dbt docs| H[Deploy GitHub Pages]
+    F -->|Delta tables| G[Databricks]
+    F --> I[Get dashboard]
+    G --> I
+    I -->|Dashboard HTML| H
+    H -->|Combined site| J[(GitHub Pages)]
 ```
 ### Pipeline Flow:
 

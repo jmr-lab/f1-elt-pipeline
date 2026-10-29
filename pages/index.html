@@ -84,10 +84,15 @@
       </div>
 
       <p class="text-secondary">
-        This project builds a Formula 1 data pipeline: it extracts race data,
-        transforms it with dbt, publishes tables to Databricks, and presents
-        the results through documentation and a dashboard.
+        This project builds an end-to-end Formula 1 data pipeline using data from Jolpica. The workflow downloads the data as a ZIP archive containing CSV files, loads it into a SQLite database, and publishes the tables to Databricks for analysis and visualisation. Insights from that analysis inform the dbt transformations and documentation. A summary view makes the transformed data and results easier to explore. The workflow then retrieves the dashboard created in Databricks and publishes it alongside the dbt documentation on GitHub Pages.
       </p>
+      <p class="text-secondary">
+        One current transformation accounts for changes in nationality across seasons, so drivers and teams can be represented with the appropriate flag for each period. For example, Bertrand Gachot raced under both French and Belgian flags, while Alfa Romeo has competed under Italian and Swiss flags, and Renault under French and British flags.
+      </p>
+      <p class="text-secondary">
+        The resulting SQLite database is also used by the companion project for exploratory data analysis (EDA) and GOAT modelling.
+      </p>
+
     </section>
 
     <div class="row g-4">

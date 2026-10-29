@@ -7,7 +7,7 @@
 [![Databricks](https://img.shields.io/badge/Databricks-Published-green?logo=databricks)](https://www.databricks.com/)
 [![dbt Documentation](https://img.shields.io/badge/dbt_docs-pages-green)](https://jmr-lab.github.io/f1-elt-pipeline/)
 
-An ELT pipeline that downloads the official F1 database dump from [Jolpica](https://api.jolpi.ca/) and transforms it into an analytics-ready dataset for Formula 1 analytics and driver GOAT analysis. Built with Python and [dbt](https://www.getdbt.com/) for modular, production-grade data transformations, with an optional publish step that mirrors the raw dataset into Databricks for interactive exploration.
+An ELT pipeline that downloads the official F1 database dump from [Jolpica](https://api.jolpi.ca/) and transforms it into an analytics-ready dataset for Formula 1 analytics and driver GOAT analysis. Built with Python and dbt for modular, production-grade data transformations, with an optional publish step that mirrors the raw dataset into Databricks for interactive exploration.
 
 ## Overview
 

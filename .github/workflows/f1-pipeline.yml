@@ -415,10 +415,11 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Copy landing page
+      - name: Copy landing page and favicon
         run: |
           mkdir -p site
           cp pages/index.html site/index.html
+          cp pages/favicon.png site/favicon.png
 
       - name: Download dbt docs
         uses: actions/download-artifact@v4

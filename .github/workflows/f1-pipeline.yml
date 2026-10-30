@@ -415,6 +415,17 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install markdown converter
+        run: pip install markdown
+
+      - name: Build ADR documentation
+        run: python scripts/build_adr_site.py
+
       - name: Copy landing page and favicon
         run: |
           mkdir -p site

@@ -118,7 +118,7 @@ def build_index(adrs: list[tuple[str, str, str]]) -> str:
 
 def main():
     adrs = []
-    source_path = Path(A DR_SOURCE_DIR)
+    source_path = Path(ADR_SOURCE_DIR)
     output_path = Path(SITE_ADR_DIR)
 
     # Ensure output directory exists

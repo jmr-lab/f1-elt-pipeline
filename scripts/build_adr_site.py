@@ -46,7 +46,6 @@ BASE_TEMPLATE = """<!doctype html>
     .resource-card:hover {{ transform: translateY(-4px); box-shadow: 0 1rem 2rem rgba(0, 0, 0, 0.12); }}
     .hero {{ background: linear-gradient(135deg, #15151e, #e10600); color: white; }}
     article {{ max-width: 900px; margin: 0 auto; padding: 2rem; background: white; border-radius: 0.5rem; box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.08); }}
-    h1 {{ color: #15151e; border-bottom: 3px solid #e10600; padding-bottom: 0.5rem; margin-bottom: 1.5rem; }}
     h2 {{ color: #15151e; margin-top: 2rem; }}
     .metadata {{ color: #6c757d; font-size: 0.9rem; margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid #dee2e6; }}
     .back-link {{ margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #dee2e6; }}

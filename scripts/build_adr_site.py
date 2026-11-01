@@ -25,13 +25,13 @@ HEADER_HTML = """
   </header>
 """
 
-BASE_TEMPLATE = f"""<!doctype html>
+BASE_TEMPLATE = """<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f8f9fa">
-  <title>{{title}} - F1 Data Project</title>
+  <title>{title} - F1 Data Project</title>
 
   <link rel="icon" type="image/png" href="../favicon.png">
   <link
@@ -41,33 +41,11 @@ BASE_TEMPLATE = f"""<!doctype html>
     crossorigin="anonymous">
 
   <style>
-    body {{
-      background: #f4f6f9;
-    }}
-
-    .resource-card {{
-      transition: transform 160ms ease, box-shadow 160ms ease;
-    }}
-
-    .resource-card:hover {{
-      transform: translateY(-4px);
-      box-shadow: 0 1rem 2rem rgba(0, 0, 0, 0.12);
-    }}
-
-    .hero {{
-      background: linear-gradient(135deg, #15151e, #e10600);
-      color: white;
-    }}
-
-    article {{
-      max-width: 900px;
-      margin: 0 auto;
-      padding: 2rem;
-      background: white;
-      border-radius: 0.5rem;
-      box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.08);
-    }}
-
+    body {{ background: #f4f6f9; }}
+    .resource-card {{ transition: transform 160ms ease, box-shadow 160ms ease; }}
+    .resource-card:hover {{ transform: translateY(-4px); box-shadow: 0 1rem 2rem rgba(0, 0, 0, 0.12); }}
+    .hero {{ background: linear-gradient(135deg, #15151e, #e10600); color: white; }}
+    article {{ max-width: 900px; margin: 0 auto; padding: 2rem; background: white; border-radius: 0.5rem; box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.08); }}
     h1 {{ color: #15151e; border-bottom: 3px solid #e10600; padding-bottom: 0.5rem; margin-bottom: 1.5rem; }}
     h2 {{ color: #15151e; margin-top: 2rem; }}
     .metadata {{ color: #6c757d; font-size: 0.9rem; margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid #dee2e6; }}
@@ -77,17 +55,11 @@ BASE_TEMPLATE = f"""<!doctype html>
     table {{ width: 100%; border-collapse: collapse; margin: 1rem 0; }}
     th, td {{ padding: 0.5rem; border: 1px solid #dee2e6; text-align: left; }}
     th {{ background: #f8f9fa; }}
-    
-    .breadcrumb-nav {{
-      padding: 1rem 0;
-      background: white;
-      border-radius: 0.25rem;
-      margin-bottom: 2rem;
-    }}
+    .breadcrumb-nav {{ padding: 1rem 0; background: white; border-radius: 0.25rem; margin-bottom: 2rem; }}
   </style>
 </head>
 <body>
-{HEADER_HTML}
+{HEADER}
   <main class="container py-5">
 <article>
 <div class="breadcrumb-nav">
@@ -98,7 +70,7 @@ BASE_TEMPLATE = f"""<!doctype html>
     </ol>
   </nav>
 </div>
-{{content}}
+{content}
 <div class="back-link">
   <a href="../index.html" class="btn btn-outline-secondary">&larr; Back to home</a>
 </div>
@@ -111,9 +83,9 @@ BASE_TEMPLATE = f"""<!doctype html>
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-pprnSPW4jJv7q8qKqCqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqK" crossorigin="anonymous"></script>
 </body>
 </html>
-"""
+""".replace("{HEADER}", HEADER_HTML)
 
-INDEX_TEMPLATE = f"""<!doctype html>
+INDEX_TEMPLATE = """<!doctype html>
 <html lang="en">
 <head>
   <meta charset="utf-8">
@@ -144,7 +116,7 @@ INDEX_TEMPLATE = f"""<!doctype html>
   </style>
 </head>
 <body>
-{HEADER_HTML}
+{HEADER}
   <main class="container py-5">
 <article>
 <div class="breadcrumb-nav">
@@ -160,7 +132,7 @@ INDEX_TEMPLATE = f"""<!doctype html>
 <p class="lead">Documentation of significant design decisions behind the F1 ELT pipeline.</p>
 
 <ul class="adr-list">
-{{adr_links}}
+{adr_links}
 </ul>
 
 <div class="back-link">
@@ -172,10 +144,10 @@ INDEX_TEMPLATE = f"""<!doctype html>
   <footer class="text-center text-secondary small mt-5">
     Formula 1 Data Project
   </footer>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-pprnSPW4jJv7q8qKqCqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqK" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-pprnSPW4jJv7q8qKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqK" crossorigin="anonymous"></script>
 </body>
 </html>
-"""
+""".replace("{HEADER}", HEADER_HTML)
 
 
 def parse_frontmatter(content: str) -> tuple[str, str]:
@@ -203,7 +175,7 @@ def build_index(adrs: list[tuple[str, str, str]]) -> str:
     """Generate the ADR index page."""
     links = []
     for num, title, status in adrs:
-        link = f'<li class="adr-item"><a href="{{num}}.html"><strong>{{num}}</strong>: {{title}}</a><br><span class="adr-meta">Status: {{status}}</span></li>'
+        link = f'<li class="adr-item"><a href="{num}.html"><strong>{num}</strong>: {title}</a><br><span class="adr-meta">Status: {status}</span></li>'
         links.append(link)
     return INDEX_TEMPLATE.format(adr_links='\n'.join(links))
 

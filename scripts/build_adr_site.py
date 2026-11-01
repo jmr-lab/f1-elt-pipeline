@@ -5,14 +5,24 @@ Generates individual HTML pages for ADRs and converts README.md to index.html.
 Uses the same Bootstrap theme as the main index.html for consistency.
 """
 
-import os
+import re
 import markdown
 from pathlib import Path
 
 ADR_SOURCE_DIR = "docs/adr"
 SITE_ADR_DIR = "site/adr"
 
-# Matches index.html hero section
+# Used to rescue links that point outside the published ADR directory.
+REPO_BLOB = "https://github.com/jmr-lab/f1-elt-pipeline/blob/main"
+
+EXTERNAL_LINK_OVERRIDES = {
+    "../../README.md": f"{REPO_BLOB}/README.md",
+    "../README.md": f"{REPO_BLOB}/docs/adr/README.md",
+    "template.md": f"{REPO_BLOB}/docs/adr/template.md",
+}
+
+MD_HREF_RE = re.compile(r'href="([^"]+)"')
+
 HEADER_HTML = """
   <header class="hero py-5">
     <div class="container py-3">
@@ -46,7 +56,6 @@ BASE_TEMPLATE = """<!doctype html>
     .resource-card:hover {{ transform: translateY(-4px); box-shadow: 0 1rem 2rem rgba(0, 0, 0, 0.12); }}
     .hero {{ background: linear-gradient(135deg, #15151e, #e10600); color: white; }}
     article {{ max-width: 900px; margin: 0 auto; padding: 2rem; background: white; border-radius: 0.5rem; box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.08); }}
-    h1 {{ color: #15151e; border-bottom: 3px solid #e10600; padding-bottom: 0.5rem; margin-bottom: 1.5rem; }}
     h2 {{ color: #15151e; margin-top: 2rem; }}
     .metadata {{ color: #6c757d; font-size: 0.9rem; margin-bottom: 2rem; padding-bottom: 1rem; border-bottom: 1px solid #dee2e6; }}
     .back-link {{ margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #dee2e6; }}
@@ -80,13 +89,40 @@ BASE_TEMPLATE = """<!doctype html>
   <footer class="text-center text-secondary small mt-5">
     Formula 1 Data Project
   </footer>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-pprnSPW4jJv7q8qKqCqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqK" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-pprnSPW4jJv7q8qKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqK" crossorigin="anonymous"></script>
 </body>
 </html>
 """.replace("{HEADER}", HEADER_HTML)
 
 
-def parse_frontmatter(content: str) -> tuple[str, str]:
+def rewrite_md_links(html: str) -> str:
+    """Point .md links at the .html files this script actually writes."""
+    def repl(match: re.Match) -> str:
+        href = match.group(1)
+
+        # Links that leave the published directory get sent to GitHub.
+        if href in EXTERNAL_LINK_OVERRIDES:
+            return f'href="{EXTERNAL_LINK_OVERRIDES[href]}"'
+
+        # Leave absolute URLs, mailto and pure anchors alone.
+        if href.startswith(("http://", "https://", "mailto:", "#", "//")):
+            return match.group(0)
+
+        path, sep, anchor = href.partition("#")
+
+        if not path.lower().endswith(".md"):
+            return match.group(0)
+
+        # Anything climbing out of the adr directory is not published here.
+        if path.startswith(("../", "/")):
+            return match.group(0)
+
+        return f'href="{path[:-3]}.html{sep}{anchor}"'
+
+    return MD_HREF_RE.sub(repl, html)
+
+
+def parse_frontmatter(content: str) -> tuple[str, str, str]:
     """Extract title and status from markdown frontmatter."""
     lines = content.split('\n')
     title = None
@@ -107,42 +143,38 @@ def parse_frontmatter(content: str) -> tuple[str, str]:
     return title, status, '\n'.join(lines[body_start:])
 
 
-def wrap_html(content: str, title: str = "Architecture Decision Records") -> str:
-    """Wrap markdown content with the HTML template."""
-    return BASE_TEMPLATE.format(title=title, content=content)
+def render(markdown_text: str, title: str) -> str:
+    """Convert markdown to a complete themed HTML page."""
+    html_body = markdown.markdown(
+        markdown_text,
+        extensions=['fenced_code', 'tables', 'toc'],
+    )
+    html_body = rewrite_md_links(html_body)
+    return BASE_TEMPLATE.format(title=title, content=html_body)
 
 
 def main():
     source_path = Path(ADR_SOURCE_DIR)
     output_path = Path(SITE_ADR_DIR)
 
-    # Ensure output directory exists
     output_path.mkdir(parents=True, exist_ok=True)
 
-    # Convert each ADR markdown file (except README.md)
-    md_files = sorted(source_path.glob("*.md"))
-    for md_file in md_files:
+    for md_file in sorted(source_path.glob("*.md")):
         if md_file.name == "template.md":
             continue
-        
+
         content = md_file.read_text(encoding="utf-8")
-        
-        # For README.md, use it as index.html
+
         if md_file.name == "README.md":
-            html_body = markdown.markdown(content, extensions=['fenced_code', 'tables', 'toc'])
-            html_page = wrap_html(html_body, "Architecture Decision Records")
+            html_page = render(content, "Architecture Decision Records")
             output_file = output_path / "index.html"
-            output_file.write_text(html_page, encoding="utf-8")
-            print(f"Generated: {output_file}")
-        
-        # For other ADRs, generate individual pages
         else:
-            title, status, body_content = parse_frontmatter(content)
-            html_body = markdown.markdown(body_content, extensions=['fenced_code', 'tables', 'toc'])
-            html_page = BASE_TEMPLATE.format(title=title, content=html_body)
+            title, _status, body_content = parse_frontmatter(content)
+            html_page = render(body_content, title or md_file.stem)
             output_file = output_path / f"{md_file.stem}.html"
-            output_file.write_text(html_page, encoding="utf-8")
-            print(f"Generated: {output_file}")
+
+        output_file.write_text(html_page, encoding="utf-8")
+        print(f"Generated: {output_file}")
 
 
 if __name__ == "__main__":

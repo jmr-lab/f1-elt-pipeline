@@ -1,40 +1,3 @@
-#!/usr/bin/env python3
-"""
-Build ADR documentation pages from markdown files.
-Generates individual HTML pages for ADRs and converts README.md to index.html.
-Uses the same Bootstrap theme as the main index.html for consistency.
-"""
-
-import re
-import markdown
-from pathlib import Path
-
-ADR_SOURCE_DIR = "docs/adr"
-SITE_ADR_DIR = "site/adr"
-
-# Used to rescue links that point outside the published ADR directory.
-REPO_BLOB = "https://github.com/jmr-lab/f1-elt-pipeline/blob/main"
-
-EXTERNAL_LINK_OVERRIDES = {
-    "../../README.md": f"{REPO_BLOB}/README.md",
-    "../README.md": f"{REPO_BLOB}/docs/adr/README.md",
-    "template.md": f"{REPO_BLOB}/docs/adr/template.md",
-}
-
-MD_HREF_RE = re.compile(r'href="([^"]+)"')
-
-HEADER_HTML = """
-  <header class="hero py-5">
-    <div class="container py-3">
-      <span class="badge text-bg-light text-dark mb-3">Architecture Decisions</span>
-      <h1 class="display-5 fw-bold">F1 Data Project</h1>
-      <p class="lead mb-0">
-        Architecture Decision Records documenting the pipeline design choices.
-      </p>
-    </div>
-  </header>
-"""
-
 BASE_TEMPLATE = """<!doctype html>
 <html lang="en">
 <head>
@@ -75,7 +38,7 @@ BASE_TEMPLATE = """<!doctype html>
   <nav aria-label="breadcrumb">
     <ol class="breadcrumb">
       <li class="breadcrumb-item"><a href="../index.html">Home</a></li>
-      <li class="breadcrumb-item active">ADRs</li>
+      <li class="breadcrumb-item"><a href="index.html">ADRs</a></li>
     </ol>
   </nav>
 </div>
@@ -89,93 +52,71 @@ BASE_TEMPLATE = """<!doctype html>
   <footer class="text-center text-secondary small mt-5">
     Formula 1 Data Project
   </footer>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-pprnSPW4jJv7q8qKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqK" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-pprnSPW4jJv7q8qKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqK" crossorigin="anonymous"></script>
 </body>
 </html>
 """.replace("{HEADER}", HEADER_HTML)
 
+INDEX_TEMPLATE = """<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f8f9fa">
+  <title>Architecture Decision Records - F1 Data Project</title>
 
-def rewrite_md_links(html: str) -> str:
-    """Point .md links at the .html files this script actually writes."""
-    def repl(match: re.Match) -> str:
-        href = match.group(1)
+  <link rel="icon" type="image/png" href="../favicon.png">
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+    integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB"
+    crossorigin="anonymous">
 
-        # Links that leave the published directory get sent to GitHub.
-        if href in EXTERNAL_LINK_OVERRIDES:
-            return f'href="{EXTERNAL_LINK_OVERRIDES[href]}"'
+  <style>
+    body {{ background: #f4f6f9; }}
+    .resource-card {{ transition: transform 160ms ease, box-shadow 160ms ease; }}
+    .resource-card:hover {{ transform: translateY(-4px); box-shadow: 0 1rem 2rem rgba(0, 0, 0, 0.12); }}
+    .hero {{ background: linear-gradient(135deg, #15151e, #e10600); color: white; }}
+    article {{ max-width: 900px; margin: 0 auto; padding: 2rem; background: white; border-radius: 0.5rem; box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.08); }}
+    h1 {{ color: #15151e; border-bottom: 3px solid #e10600; padding-bottom: 0.5rem; margin-bottom: 1.5rem; }}
+    .adr-list {{ list-style: none; padding: 0; }}
+    .adr-item {{ padding: 1rem; margin-bottom: 0.5rem; background: #f8f9fa; border-left: 4px solid #6d4aff; border-radius: 0 0.25rem 0.25rem 0; }}
+    .adr-item:hover {{ background: #e9ecef; }}
+    .adr-meta {{ color: #6c757d; font-size: 0.85rem; }}
+    .back-link {{ margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #dee2e6; }}
+    .breadcrumb-nav {{ padding: 1rem 0; background: white; border-radius: 0.25rem; margin-bottom: 2rem; }}
+  </style>
+</head>
+<body>
+{HEADER}
+  <main class="container py-5">
+<article>
+<div class="breadcrumb-nav">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="../index.html">Home</a></li>
+      <li class="breadcrumb-item active">ADRs</li>
+    </ol>
+  </nav>
+</div>
 
-        # Leave absolute URLs, mailto and pure anchors alone.
-        if href.startswith(("http://", "https://", "mailto:", "#", "//")):
-            return match.group(0)
+<h1>Architecture Decision Records</h1>
+<p class="lead">Documentation of significant design decisions behind the F1 ELT pipeline.</p>
 
-        path, sep, anchor = href.partition("#")
+<ul class="adr-list">
+{adr_links}
+</ul>
 
-        if not path.lower().endswith(".md"):
-            return match.group(0)
+<div class="back-link">
+  <a href="../index.html" class="btn btn-outline-secondary">&larr; Back to home</a>
+</div>
+</article>
+  </main>
 
-        # Anything climbing out of the adr directory is not published here.
-        if path.startswith(("../", "/")):
-            return match.group(0)
-
-        return f'href="{path[:-3]}.html{sep}{anchor}"'
-
-    return MD_HREF_RE.sub(repl, html)
-
-
-def parse_frontmatter(content: str) -> tuple[str, str, str]:
-    """Extract title and status from markdown frontmatter."""
-    lines = content.split('\n')
-    title = None
-    status = None
-    body_start = 0
-
-    for i, line in enumerate(lines):
-        if line.startswith('# '):
-            title = line[2:].strip()
-            body_start = i + 1
-            break
-
-    for line in lines:
-        if 'Status:' in line:
-            status = line.split('Status:')[1].strip()
-            break
-
-    return title, status, '\n'.join(lines[body_start:])
-
-
-def render(markdown_text: str, title: str) -> str:
-    """Convert markdown to a complete themed HTML page."""
-    html_body = markdown.markdown(
-        markdown_text,
-        extensions=['fenced_code', 'tables', 'toc'],
-    )
-    html_body = rewrite_md_links(html_body)
-    return BASE_TEMPLATE.format(title=title, content=html_body)
-
-
-def main():
-    source_path = Path(ADR_SOURCE_DIR)
-    output_path = Path(SITE_ADR_DIR)
-
-    output_path.mkdir(parents=True, exist_ok=True)
-
-    for md_file in sorted(source_path.glob("*.md")):
-        if md_file.name == "template.md":
-            continue
-
-        content = md_file.read_text(encoding="utf-8")
-
-        if md_file.name == "README.md":
-            html_page = render(content, "Architecture Decision Records")
-            output_file = output_path / "index.html"
-        else:
-            title, _status, body_content = parse_frontmatter(content)
-            html_page = render(body_content, title or md_file.stem)
-            output_file = output_path / f"{md_file.stem}.html"
-
-        output_file.write_text(html_page, encoding="utf-8")
-        print(f"Generated: {output_file}")
-
-
-if __name__ == "__main__":
-    main()
+  <footer class="text-center text-secondary small mt-5">
+    Formula 1 Data Project
+  </footer>
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js" integrity="sha384-pprnSPW4jJv7q8qKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqKqK" crossorigin="anonymous"></script>
+</body>
+</html>
+""".replace("{HEADER}", HEADER_HTML)

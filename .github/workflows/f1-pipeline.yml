@@ -4,8 +4,8 @@ on:
   workflow_dispatch:
   
   schedule:
-    - cron: '0 0 * * 3'
-    - cron: '43 0 * * 4'
+    # Daily at 15:00 UTC = 01:00 AEST / 02:00 AEDT
+    - cron: '0 15 * * *'
 
 permissions:
   contents: write

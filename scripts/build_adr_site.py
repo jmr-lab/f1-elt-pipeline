@@ -1,3 +1,41 @@
+#!/usr/bin/env python3
+"""
+Build ADR documentation pages from markdown files.
+Generates individual HTML pages for ADRs and converts README.md to index.html.
+Uses the same Bootstrap theme as the main index.html for consistency.
+"""
+
+import re
+import markdown
+from pathlib import Path
+
+ADR_SOURCE_DIR = "docs/adr"
+SITE_ADR_DIR = "site/adr"
+
+# Used to rescue links that point outside the published ADR directory.
+REPO_BLOB = "https://github.com/jmr-lab/f1-elt-pipeline/blob/main"
+
+EXTERNAL_LINK_OVERRIDES = {
+    "../../README.md": f"{REPO_BLOB}/README.md",
+    "../README.md": f"{REPO_BLOB}/docs/adr/README.md",
+    "template.md": f"{REPO_BLOB}/docs/adr/template.md",
+}
+
+MD_HREF_RE = re.compile(r'href="([^"]+)"')
+
+# Matches index.html hero section - must come before templates use it
+HEADER_HTML = """
+  <header class="hero py-5">
+    <div class="container py-3">
+      <span class="badge text-bg-light text-dark mb-3">Architecture Decisions</span>
+      <h1 class="display-5 fw-bold">F1 Data Project</h1>
+      <p class="lead mb-0">
+        Architecture Decision Records documenting the pipeline design choices.
+      </p>
+    </div>
+  </header>
+"""
+
 BASE_TEMPLATE = """<!doctype html>
 <html lang="en">
 <head>
@@ -120,3 +158,84 @@ INDEX_TEMPLATE = """<!doctype html>
 </body>
 </html>
 """.replace("{HEADER}", HEADER_HTML)
+
+def rewrite_md_links(html: str) -> str:
+    """Point .md links at the .html files this script actually writes."""
+    def repl(match: re.Match) -> str:
+        href = match.group(1)
+
+        # Links that leave the published ADR directory get sent to GitHub.
+        if href in EXTERNAL_LINK_OVERRIDES:
+            return f'href="{EXTERNAL_LINK_OVERRIDES[href]}"'
+
+        # Leave absolute URLs, mailto and pure anchors alone.
+        if href.startswith(("http://", "https://", "mailto:", "#", "//")):
+            return match.group(0)
+
+        path, sep, anchor = href.partition("#")
+
+        if not path.lower().endswith(".md"):
+            return match.group(0)
+
+        # Anything climbing out of the adr directory is not published here.
+        if path.startswith(("../", "/")):
+            return match.group(0)
+
+        return f'href="{path[:-3]}.html{sep}{anchor}"'
+
+    return MD_HREF_RE.sub(repl, html)
+
+def parse_frontmatter(content: str) -> tuple[str, str, str]:
+    """Extract title and status from markdown frontmatter."""
+    lines = content.split('\n')
+    title = None
+    status = None
+    body_start = 0
+
+    for i, line in enumerate(lines):
+        if line.startswith('# '):
+            title = line[2:].strip()
+            body_start = i + 1
+            break
+
+    for line in lines:
+        if 'Status:' in line:
+            status = line.split('Status:')[1].strip()
+            break
+
+    return title, status, '\n'.join(lines[body_start:])
+
+def render(markdown_text: str, title: str) -> str:
+    """Convert markdown to a complete themed HTML page."""
+    html_body = markdown.markdown(
+        markdown_text,
+        extensions=['fenced_code', 'tables', 'toc'],
+    )
+    html_body = rewrite_md_links(html_body)
+    return BASE_TEMPLATE.format(title=title, content=html_body)
+
+def main():
+    source_path = Path(ADR_SOURCE_DIR)
+    output_path = Path(SITE_ADR_DIR)
+
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    for md_file in sorted(source_path.glob("*.md")):
+        if md_file.name == "template.md":
+            continue
+
+        content = md_file.read_text(encoding="utf-8")
+
+        if md_file.name == "README.md":
+            html_page = render(content, "Architecture Decision Records")
+            output_file = output_path / "index.html"
+        else:
+            title, _status, body_content = parse_frontmatter(content)
+            html_page = render(body_content, title or md_file.stem)
+            output_file = output_path / f"{md_file.stem}.html"
+
+        output_file.write_text(html_page, encoding="utf-8")
+        print(f"Generated: {output_file}")
+
+if __name__ == "__main__":
+    main()

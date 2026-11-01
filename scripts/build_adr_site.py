@@ -16,8 +16,8 @@ SITE_ADR_DIR = "site/adr"
 HEADER_HTML = """
   <header class="hero py-5">
     <div class="container py-3">
-      <span class="badge text-bg-light text-dark mb-3">Architecture Decisions</span>
-      <h1 class="display-5 fw-bold">F1 Data Project</h1>
+      <span class="badge text-bg-light text-dark mb-3">Formula 1 Data Project</span>
+      <h1 class="display-5 fw-bold">Explore the data</h1>
       <p class="lead mb-0">
         Architecture Decision Records documenting the pipeline design choices.
       </p>

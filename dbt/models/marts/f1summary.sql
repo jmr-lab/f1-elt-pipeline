@@ -94,10 +94,10 @@ SELECT
     tn.name                                     AS constructorName,
     dn.country                                  AS driverCountry,
     tn.country                                  AS constructorCountry,
-    'images/icons8-' ||
+    'images/flags/icons8-' ||
         replace(lower(COALESCE(dn.country, 'unknown')), ' ', '-') ||
         '-50.png'                               AS driverImage,
-    'images/icons8-' ||
+    'images/flags/icons8-' ||
         replace(lower(COALESCE(tn.country, 'unknown')), ' ', '-') ||
         '-50.png'                               AS constructorImage
 FROM {{ ref('session_entry') }} se

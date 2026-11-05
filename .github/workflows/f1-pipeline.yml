@@ -269,6 +269,13 @@ jobs:
           dbfolio build dbt/target/erd/schema.json \
             -o dbt/target/erd/site
 
+      - name: Upload ERD site
+        uses: actions/upload-artifact@v4
+        with:
+          name: erd-site
+          path: dbt/target/erd/site/
+          if-no-files-found: error
+
       - name: Create release
         uses: ncipollo/release-action@v1
         with:
@@ -457,6 +464,12 @@ jobs:
         with:
           name: dbt-docs
           path: site/dbt
+
+      - name: Download ERD site
+        uses: actions/download-artifact@v4
+        with:
+          name: erd-site
+          path: site/erd
 
       - name: Download dashboard HTML
         uses: actions/download-artifact@v4

@@ -249,6 +249,24 @@ jobs:
           git pull --rebase --autostash origin main
           git push origin main
 
+      - name: Export schema only
+        run: |
+          mkdir -p docs
+          sqlite3 dist/formula1.db '.schema' > docs/formula1-schema.sql
+          test -s docs/formula1-schema.sql
+
+      - name: Commit schema file
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/formula1-schema.sql
+          if git diff --cached --quiet; then
+            echo "Schema unchanged"
+            exit 0
+          fi
+          git commit -m "Update schema SQL [skip ci]"
+          git push origin main
+
       - name: Create release
         uses: ncipollo/release-action@v1
         with:

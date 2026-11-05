@@ -249,33 +249,6 @@ jobs:
           git pull --rebase --autostash origin main
           git push origin main
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: 'stable'
-
-      - name: Install schema documentation tools
-        run: |
-          go install github.com/k1LoW/tbls@latest
-          go install github.com/onozaty/dbfolio/cmd/dbfolio@latest
-          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
-
-      - name: Generate interactive ERD site
-        run: |
-          mkdir -p dbt/target/erd
-          tbls out -t json \
-            -o dbt/target/erd/schema.json \
-            "sqlite://${GITHUB_WORKSPACE}/dist/formula1.db"
-          dbfolio build dbt/target/erd/schema.json \
-            -o dbt/target/erd/site
-
-      - name: Upload ERD site
-        uses: actions/upload-artifact@v4
-        with:
-          name: erd-site
-          path: dbt/target/erd/site/
-          if-no-files-found: error
-
       - name: Create release
         uses: ncipollo/release-action@v1
         with:
@@ -464,12 +437,6 @@ jobs:
         with:
           name: dbt-docs
           path: site/dbt
-
-      - name: Download ERD site
-        uses: actions/download-artifact@v4
-        with:
-          name: erd-site
-          path: site/erd
 
       - name: Download dashboard HTML
         uses: actions/download-artifact@v4

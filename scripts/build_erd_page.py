@@ -2,8 +2,11 @@
 import sys
 from pathlib import Path
 
-SRC = Path(sys.argv[1] if len(sys.argv) > 1 else "docs/formula1_erd.mmd")
-DEST = Path(sys.argv[2] if len(sys.argv) > 2 else "dbt/target/erd.html")
+DEST = Path(sys.argv[1] if len(sys.argv) > 1 else "dbt/target/erd.html")
+
+# Embed URL generated from the Azimutt share modal
+# (loads the schema committed at docs/formula1-erd-schema.sql)
+AZIMUTT_EMBED_URL = "https://azimutt.app/embed?sql-source=https%3A%2F%2Fraw.githubusercontent.com%2Fjmr-lab%2Ff1-elt-pipeline%2Frefs%2Fheads%2Fmain%2Fdocs%2Fformula1-erd-schema.sql&layout=initial%20layout&mode=full"
 
 TEMPLATE = """<!DOCTYPE html>
 <html lang="en">
@@ -12,28 +15,22 @@ TEMPLATE = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Formula1 Data Model</title>
 <style>
-  body { margin: 0; font-family: system-ui, -apple-system, sans-serif; color: #1a1a1a; }
+  html, body { margin: 0; height: 100%; font-family: system-ui, -apple-system, sans-serif; }
   header { padding: 14px 22px; border-bottom: 1px solid #e6e6e6; font-size: 15px; }
   header a { color: #6d4aff; text-decoration: none; }
-  #diagram { padding: 22px; overflow: auto; text-align: center; }
+  iframe { display: block; width: 100%; height: calc(100vh - 50px); border: none; }
 </style>
 </head>
 <body>
-<header><strong>Formula1 Data Model</strong> &nbsp;·&nbsp; <a href="./">← dbt docs</a></header>
-<div id="diagram" class="mermaid">
-__DIAGRAM__
-</div>
-<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-<script>mermaid.initialize({ startOnLoad: true });</script>
+<header><strong>Formula1 Data Model</strong> &nbsp;·&nbsp; <a href="./">← dbt docs</a> &nbsp;·&nbsp; <a href="https://azimutt.app">Powered by Azimutt</a></header>
+<iframe src="__EMBED_URL__" title="Interactive ERD — explore tables and relationships"></iframe>
 </body>
 </html>
 """
 
 def main():
-    if not SRC.exists():
-        sys.exit(f"ERROR: {SRC} not found")
     DEST.parent.mkdir(parents=True, exist_ok=True)
-    DEST.write_text(TEMPLATE.replace("__DIAGRAM__", SRC.read_text().strip()))
+    DEST.write_text(TEMPLATE.replace("__EMBED_URL__", AZIMUTT_EMBED_URL))
     print(f"Wrote {DEST} ({DEST.stat().st_size} bytes)")
 
 if __name__ == "__main__":

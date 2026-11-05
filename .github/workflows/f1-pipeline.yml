@@ -249,11 +249,16 @@ jobs:
           git pull --rebase --autostash origin main
           git push origin main
 
-      - name: Export schema only
+      - name: Export table definitions only
         run: |
           mkdir -p docs
-          sqlite3 dist/formula1.db '.schema' > docs/formula1-schema.sql
-          test -s docs/formula1-schema.sql
+          sqlite3 dist/formula1.db \
+            "SELECT sql || ';' FROM sqlite_schema
+             WHERE type = 'table'
+               AND name NOT LIKE 'sqlite_%'
+               AND sql IS NOT NULL
+             ORDER BY name;" \
+            > docs/formula1-schema.sql
 
       - name: Commit schema file
         run: |

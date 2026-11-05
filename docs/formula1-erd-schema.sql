@@ -1,8 +1,9 @@
 -- Reference tables (no FKs)
 CREATE TABLE countries (
   id INTEGER PRIMARY KEY,
-  country_code TEXT NOT NULL UNIQUE,
-  country TEXT NOT NULL
+  country_code TEXT NOT NULL,
+  country TEXT NOT NULL,
+  CONSTRAINT uq_countries_country_code UNIQUE (country_code)
 );
 
 CREATE TABLE championship_system (
@@ -73,9 +74,10 @@ CREATE TABLE team (
 
 CREATE TABLE season (
   id INTEGER PRIMARY KEY,
-  year INT NOT NULL UNIQUE,
+  year INT NOT NULL,
   championship_system_id INT REFERENCES championship_system(id),
-  wikipedia TEXT
+  wikipedia TEXT,
+  CONSTRAINT uq_season_year UNIQUE (year)
 );
 
 CREATE TABLE round (
@@ -110,7 +112,7 @@ CREATE TABLE team_driver (
   team_id INT NOT NULL REFERENCES team(id),
   driver_id INT NOT NULL REFERENCES driver(id),
   role TEXT,
-  UNIQUE(season_id, team_id, driver_id)
+  CONSTRAINT uq_team_driver UNIQUE (season_id, team_id, driver_id)
 );
 
 CREATE TABLE season_driver (
@@ -222,7 +224,7 @@ CREATE TABLE driver_nationality_corrections (
   season_id_start INT NOT NULL REFERENCES season(id),
   season_id_end INT REFERENCES season(id),
   country_code TEXT NOT NULL REFERENCES countries(country_code),
-  PRIMARY KEY(driver_id, season_id_start)
+  CONSTRAINT pk_dnc PRIMARY KEY (driver_id, season_id_start)
 );
 
 CREATE TABLE team_nationality_corrections (
@@ -231,7 +233,7 @@ CREATE TABLE team_nationality_corrections (
   season_id_end INT REFERENCES season(id),
   country_code TEXT NOT NULL REFERENCES countries(country_code),
   name TEXT,
-  PRIMARY KEY(team_id, season_id_start)
+  CONSTRAINT pk_tnc PRIMARY KEY (team_id, season_id_start)
 );
 
 -- Penalty/staging tables (some FKs uncertain without more context)

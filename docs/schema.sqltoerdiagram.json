@@ -1,0 +1,167 @@
+{
+  "app": "dbdiga",
+  "version": 1,
+  "sql": "-- Reference tables (no FKs)\nCREATE TABLE countries (\n  id INTEGER PRIMARY KEY,\n  country_code TEXT NOT NULL,\n  country TEXT NOT NULL,\n  CONSTRAINT uq_countries_country_code UNIQUE (country_code)\n);\n\nCREATE TABLE championship_system (\n  id INTEGER PRIMARY KEY,\n  name TEXT,\n  reference TEXT,\n  driver_best_results INT,\n  team_best_results INT,\n  driver_season_split INT,\n  team_season_split INT,\n  team_points_per_session INT,\n  eligibility TEXT\n);\n\nCREATE TABLE points_system (\n  id INTEGER PRIMARY KEY,\n  name TEXT,\n  reference TEXT,\n  partial INT,\n  driver_position_points INT,\n  driver_fastest_lap INT,\n  team_position_points INT,\n  team_fastest_lap INT,\n  shared_drive INT,\n  is_double_points INT\n);\n\n-- Dimension tables\nCREATE TABLE circuit (\n  id INTEGER PRIMARY KEY,\n  name TEXT NOT NULL,\n  reference TEXT,\n  locality TEXT,\n  country TEXT,\n  country_code TEXT REFERENCES countries(country_code),\n  latitude REAL,\n  longitude REAL,\n  altitude INT,\n  wikipedia TEXT\n);\n\nCREATE TABLE base_team (\n  id INTEGER PRIMARY KEY,\n  name TEXT\n);\n\nCREATE TABLE driver (\n  id INTEGER PRIMARY KEY,\n  reference TEXT,\n  abbreviation TEXT,\n  forename TEXT,\n  surname TEXT,\n  country_code TEXT REFERENCES countries(country_code),\n  date_of_birth DATE,\n  permanent_car_number INT,\n  wikipedia TEXT\n);\n\nCREATE TABLE team (\n  id INTEGER PRIMARY KEY,\n  name TEXT NOT NULL,\n  reference TEXT,\n  country_code TEXT REFERENCES countries(country_code),\n  base_team_id INT REFERENCES base_team(id),\n  primary_color TEXT,\n  wikipedia TEXT\n);\n\nCREATE TABLE season (\n  id INTEGER PRIMARY KEY,\n  year INT NOT NULL,\n  championship_system_id INT REFERENCES championship_system(id),\n  wikipedia TEXT,\n  CONSTRAINT uq_season_year UNIQUE (year)\n);\n\nCREATE TABLE round (\n  id INTEGER PRIMARY KEY,\n  season_id INT NOT NULL REFERENCES season(id),\n  circuit_id INT REFERENCES circuit(id),\n  number INT,\n  race_number INT,\n  name TEXT,\n  date DATE,\n  is_cancelled INT DEFAULT 0,\n  wikipedia TEXT\n);\n\nCREATE TABLE session (\n  id INTEGER PRIMARY KEY,\n  round_id INT NOT NULL REFERENCES round(id),\n  type TEXT NOT NULL,\n  number INT,\n  timestamp TIMESTAMP,\n  timezone TEXT,\n  scheduled_laps INT,\n  point_system_id INT REFERENCES points_system(id),\n  is_cancelled INT DEFAULT 0,\n  has_time_data INT DEFAULT 0\n);\n\n-- Junction/relationship tables\nCREATE TABLE team_driver (\n  id INTEGER PRIMARY KEY,\n  season_id INT NOT NULL REFERENCES season(id),\n  team_id INT NOT NULL REFERENCES team(id),\n  driver_id INT NOT NULL REFERENCES driver(id),\n  role TEXT,\n  CONSTRAINT uq_team_driver UNIQUE (season_id, team_id, driver_id)\n);\n\nCREATE TABLE season_driver (\n  id INTEGER PRIMARY KEY,\n  season_id INT NOT NULL REFERENCES season(id),\n  driver_id INT NOT NULL REFERENCES driver(id),\n  country_id INT REFERENCES countries(id)\n);\n\nCREATE TABLE season_team (\n  id INTEGER PRIMARY KEY,\n  season_id INT NOT NULL REFERENCES season(id),\n  team_id INT NOT NULL REFERENCES team(id),\n  country_id INT REFERENCES countries(id),\n  name TEXT\n);\n\nCREATE TABLE roundentry (\n  id INTEGER PRIMARY KEY,\n  round_id INT NOT NULL REFERENCES round(id),\n  team_driver_id INT NOT NULL REFERENCES team_driver(id),\n  car_number INT\n);\n\n-- Session-level transactional tables\nCREATE TABLE session_entry (\n  id INTEGER PRIMARY KEY,\n  session_id INT NOT NULL REFERENCES session(id),\n  round_entry_id INT NOT NULL REFERENCES roundentry(id),\n  grid INT,\n  position INT,\n  points REAL,\n  laps_completed INT,\n  fastest_lap_rank INT,\n  time TEXT,\n  detail TEXT,\n  status TEXT,\n  is_classified INT DEFAULT 0,\n  is_eligible_for_points INT DEFAULT 0\n);\n\nCREATE TABLE lap (\n  id INTEGER PRIMARY KEY,\n  session_entry_id INT NOT NULL REFERENCES session_entry(id),\n  number INT,\n  position INT,\n  time TEXT,\n  average_speed TEXT,\n  is_entry_fastest_lap INT DEFAULT 0,\n  is_deleted INT DEFAULT 0\n);\n\nCREATE TABLE pit_stop (\n  id INTEGER PRIMARY KEY,\n  session_entry_id INT NOT NULL REFERENCES session_entry(id),\n  lap_id INT REFERENCES lap(id),\n  number INT,\n  duration TEXT,\n  local_timestamp TEXT\n);\n\n-- Championship/standings tables\nCREATE TABLE driver_championship (\n  id INTEGER PRIMARY KEY,\n  season_id INT NOT NULL REFERENCES season(id),\n  year INT NOT NULL,\n  driver_id INT NOT NULL REFERENCES driver(id),\n  round_id INT REFERENCES round(id),\n  position INT,\n  points REAL,\n  win_count INT DEFAULT 0,\n  highest_finish INT,\n  is_eligible INT DEFAULT 1,\n  adjustment_type TEXT,\n  session_id INT REFERENCES session(id),\n  session_number INT,\n  round_number INT\n);\n\nCREATE TABLE team_championship (\n  id INTEGER PRIMARY KEY,\n  season_id INT NOT NULL REFERENCES season(id),\n  year INT NOT NULL,\n  team_id INT NOT NULL REFERENCES team(id),\n  round_id INT REFERENCES round(id),\n  position INT,\n  points REAL,\n  win_count INT DEFAULT 0,\n  highest_finish INT,\n  is_eligible INT DEFAULT 1,\n  adjustment_type TEXT,\n  session_id INT REFERENCES session(id),\n  session_number INT,\n  round_number INT\n);\n\nCREATE TABLE championship_adjustment (\n  id INTEGER PRIMARY KEY,\n  adjustment INT,\n  driver_id INT REFERENCES driver(id),\n  points REAL,\n  season_id INT REFERENCES season(id),\n  team_id INT REFERENCES team(id)\n);\n\n-- Corrections/audit tables\nCREATE TABLE driver_nationality_corrections (\n  driver_id INT NOT NULL REFERENCES driver(id),\n  season_id_start INT NOT NULL REFERENCES season(id),\n  season_id_end INT REFERENCES season(id),\n  country_code TEXT NOT NULL REFERENCES countries(country_code),\n  CONSTRAINT pk_dnc PRIMARY KEY (driver_id, season_id_start)\n);\n\nCREATE TABLE team_nationality_corrections (\n  team_id INT NOT NULL REFERENCES team(id),\n  season_id_start INT NOT NULL REFERENCES season(id),\n  season_id_end INT REFERENCES season(id),\n  country_code TEXT NOT NULL REFERENCES countries(country_code),\n  name TEXT,\n  CONSTRAINT pk_tnc PRIMARY KEY (team_id, season_id_start)\n);\n\n-- Penalty/staging tables (some FKs uncertain without more context)\nCREATE TABLE penalty (\n  id INTEGER PRIMARY KEY,\n  earned_id INT NOT NULL REFERENCES session_entry(id),\n  served_id INT NOT NULL REFERENCES session_entry(id),\n  position INT,\n  license_points INT,\n  is_time_served_in_pit INT DEFAULT 0,\n  time TEXT\n);",
+  "dialect": "sqlite",
+  "positions": {
+    "penalty": {
+      "x": -8,
+      "y": -390
+    },
+    "points_system": {
+      "x": -1235,
+      "y": -471
+    },
+    "championship_system": {
+      "x": -1237,
+      "y": -750
+    },
+    "base_team": {
+      "x": 1214,
+      "y": 444
+    },
+    "pit_stop": {
+      "x": 266,
+      "y": -120
+    },
+    "lap": {
+      "x": 320,
+      "y": 94
+    },
+    "team_championship": {
+      "x": -700,
+      "y": -578
+    },
+    "driver_championship": {
+      "x": -1017,
+      "y": -552
+    },
+    "session": {
+      "x": -242,
+      "y": 10
+    },
+    "session_entry": {
+      "x": 101,
+      "y": -37
+    },
+    "roundentry": {
+      "x": -255,
+      "y": -318
+    },
+    "round": {
+      "x": 137,
+      "y": -379
+    },
+    "championship_adjustment": {
+      "x": 563,
+      "y": 49
+    },
+    "driver": {
+      "x": 812,
+      "y": 277
+    },
+    "team_driver": {
+      "x": 859,
+      "y": 17
+    },
+    "driver_nationality_corrections": {
+      "x": 1213,
+      "y": 1
+    },
+    "team_nationality_corrections": {
+      "x": 1061,
+      "y": 151
+    },
+    "team": {
+      "x": 1259,
+      "y": 328
+    },
+    "season": {
+      "x": 538,
+      "y": -649
+    },
+    "circuit": {
+      "x": 768,
+      "y": -447
+    },
+    "season_team": {
+      "x": 855,
+      "y": -691
+    },
+    "countries": {
+      "x": 1080,
+      "y": -298
+    },
+    "season_driver": {
+      "x": 1125,
+      "y": -649
+    }
+  },
+  "camera": {
+    "x": 677,
+    "y": 484,
+    "scale": 0.4991
+  },
+  "annotations": [
+    {
+      "id": "amw4grahw-4",
+      "type": "group",
+      "x": -1108.8803195968153,
+      "y": -643.7121953975098,
+      "w": 684.8212092923819,
+      "h": 574.1875168167309,
+      "text": "Rules & Standings",
+      "color": "purple"
+    },
+    {
+      "id": "amw4gn2g4-2",
+      "type": "group",
+      "x": -324.59146893288204,
+      "y": -436.9530626021291,
+      "w": 751.2578916011776,
+      "h": 819.706445778878,
+      "text": "Race Weekend",
+      "color": "amber"
+    },
+    {
+      "id": "amw4gct0a-1",
+      "type": "group",
+      "x": 507.71457086934277,
+      "y": -30.928998984779618,
+      "w": 980.0662614048673,
+      "h": 593.5493216231304,
+      "text": "Teams",
+      "color": "blue"
+    },
+    {
+      "id": "amw4gpvvl-3",
+      "type": "group",
+      "x": 495.5942693005518,
+      "y": -740.2831893455838,
+      "w": 875.8205089773975,
+      "h": 613.2321292167064,
+      "text": "Calendar & Venue",
+      "color": "green"
+    }
+  ],
+  "hidden": [
+    "base_team",
+    "championship_system",
+    "lap",
+    "penalty",
+    "pit_stop",
+    "points_system"
+  ],
+  "manualLinks": [
+    {
+      "from": {
+        "table": "circuit",
+        "col": "locality"
+      },
+      "to": {
+        "table": "circuit",
+        "col": "id"
+      }
+    }
+  ]
+}

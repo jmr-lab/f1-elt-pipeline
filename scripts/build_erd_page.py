@@ -14,6 +14,7 @@ TEMPLATE = """<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Formula1 Data Model</title>
+<link rel="icon" type="image/png" href="favicon.png">
 <style>
   html, body { margin: 0; height: 100%; font-family: system-ui, -apple-system, sans-serif; }
   header { padding: 14px 22px; border-bottom: 1px solid #e6e6e6; font-size: 15px; }

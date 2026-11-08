@@ -31,7 +31,7 @@ flowchart LR
     B -->|pickle artifact| C[Load]
     C -->|jolpica.db| D[Transform]
     C -->|jolpica.db| F[Publish to Databricks]
-    D -->|dbt docs| H[Deploy GitHub Pages]
+    D -->|formula1.db, dbt docs| H[Deploy GitHub Pages]
     F -->|Delta tables| G[Databricks]
     F --> I[Get dashboard]
     G --> I

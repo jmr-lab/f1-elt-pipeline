@@ -71,7 +71,7 @@ The pipeline performs the following steps:
 The two branches of the pipeline are intentionally decoupled: a Databricks
 outage cannot block the local SQLite build and release.
 
-![Pipeline architecture: Jolpica → SQLite → dbt / Databricks](images/pipeline.png)
+![Pipeline architecture: Jolpica → SQLite → dbt / Databricks](img/pipeline.png)
 *Pipeline architecture: Jolpica → SQLite → dbt / Databricks.*
 
 Two design decisions are worth highlighting, as they affect the reproducibility
@@ -539,7 +539,7 @@ table is declared as a dbt source, and models are organised in the customary
 staging → mart progression. The lineage of the current implementation is
 shown below.
 
-![Transformation lineage: Jolpica source tables (left) mapped through dbt to the analytical tables (right)](images/dbt-dag.png)
+![Transformation lineage: Jolpica source tables (left) mapped through dbt to the analytical tables (right)](img/dbt-dag.png)
 *Transformation lineage: Jolpica source tables (left) mapped through dbt to
 the analytical tables (right). This figure is a snapshot; the full,
 interactive and always up-to-date diagram is available in the project's
@@ -727,7 +727,7 @@ unchanged, grouped by domain; the additions described in
 the two `*_nationality_corrections` tables together with the `countries`
 lookup, and the season-scoped `season_driver` and `season_team` associations.
 
-![Entity-relationship diagram of the analytical database formula1.db after transformation](images/formula1_erd.png)
+![Entity-relationship diagram of the analytical database formula1.db after transformation](img/formula1_erd.png)
 *Entity-relationship diagram of the analytical database `formula1.db`
 after transformation.*
 

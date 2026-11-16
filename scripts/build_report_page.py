@@ -97,6 +97,9 @@ BASE_TEMPLATE = """<!doctype html>
       transform: translateY(-4px);
       box-shadow: 0 1rem 2rem rgba(0, 0, 0, 0.12);
     }
+    article img {{ display: block; max-width: 100%; height: auto; margin: 2rem auto;
+              border-radius: 0.5rem;
+              box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.12); }}
   </style>
 </head>
 <body>

@@ -469,7 +469,7 @@ jobs:
           mkdir -p site
           cp pages/index.html site/index.html
           cp pages/favicon.png site/favicon.png
-          cp -r docs/images site/img
+          cp -r images site/img
 
       - name: Download dbt docs
         uses: actions/download-artifact@v4

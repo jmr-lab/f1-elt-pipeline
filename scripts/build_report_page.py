@@ -315,9 +315,13 @@ def build_queries() -> dict:
 # ---------------------------------------------------------------------------
 
 def df_to_html(df: pd.DataFrame) -> str:
-    """Render a data frame as a Bootstrap-styled table (pd.NA -> empty)."""
-    return df.to_html(index=False, border=0, na_rep="",
+    """Render a data frame as a Bootstrap table with a dark header row."""
+    html = df.to_html(index=False, border=0, na_rep="",
                       classes="table table-sm table-striped")
+    # pandas always emits a bare <thead>; promote it to the dark variant
+    html = html.replace("<thead>", '<thead class="table-dark">', 1)
+    # keep wide tables (e.g. the season/pit_stop heads) scrollable on mobile
+    return f'<div class="table-responsive">\n{html}</div>'
 
 def list_tables(con: sqlite3.Connection) -> list[str]:
     """All user tables, skipping SQLite internals (mirrors the R filter)."""

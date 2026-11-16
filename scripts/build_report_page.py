@@ -13,8 +13,19 @@ Usage:
     python scripts/build_report_page.py [--raw PATH] [--analytics PATH]
                                         [--source PATH] [--output PATH]
 
-The R equivalent of every query is documented in the companion project's
-analysis script; SQL column names mirror the Jolpica export schema.
+Schema notes (verified against the Jolpica export):
+  - session_entry: id, session_id, round_entry_id, grid, position, points
+    (double), laps_completed, fastest_lap_rank, time, detail, status,
+    is_classified (string), is_eligible_for_points (string), api_id
+  - roundentry:    id, round_id, team_driver_id, car_number, api_id
+  - round:         id, season_id, circuit_id, number, race_number, name,
+                   date, is_cancelled, wikipedia, api_id
+  - session:       id, round_id, type, number, timestamp, timezone,
+                   scheduled_laps, point_system_id, is_cancelled,
+                   has_time_data, api_id
+Flag columns are strings compared against 'f' (t/f convention, matching
+the companion R analysis). If Jolpica ever changes that convention, the
+WHERE clauses below are the lines to adjust.
 """
 
 import argparse
@@ -92,6 +103,7 @@ BASE_TEMPLATE = """<!doctype html>
     figcaption {{ color: #6c757d; font-size: 0.9rem; margin-top: 0.5rem; text-align: center; }}
     .breadcrumb-nav {{ padding: 1rem 0; background: white; border-radius: 0.25rem;
                        margin-bottom: 2rem; }}
+    .back-link {{ margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #dee2e6; }}
   </style>
 </head>
 <body>
@@ -107,7 +119,7 @@ BASE_TEMPLATE = """<!doctype html>
   </nav>
 </div>
 {content}
-<div class="back-link mt-4 pt-3 border-top">
+<div class="back-link">
   <a href="index.html" class="btn btn-outline-secondary">&larr; Back to home</a>
 </div>
 </article>
@@ -126,17 +138,17 @@ BASE_TEMPLATE = """<!doctype html>
 # The Jolpica export spreads a driver's race result across five tables
 # (session_entry -> session / roundentry -> team_driver -> round / team /
 # driver / season). This temp view flattens it, restricted to Grand Prix
-# sessions ("R"), exactly like the R dplyr chain it replaces.
+# sessions ("R"), exactly like the R dplyr chain it replaces. The driver
+# name is computed here so consuming queries can select rf.driver directly.
 
 RESULTS_VIEW_SQL = """
 CREATE TEMP VIEW results_flat AS
 SELECT
   se.id,
   sn.year,
-  rnd.name           AS circuit,
-  d.forename,
-  d.surname,
-  t.name             AS team,
+  rnd.name            AS circuit,
+  TRIM(COALESCE(d.forename, '') || ' ' || COALESCE(d.surname, '')) AS driver,
+  t.name              AS team,
   se.position,
   se.points,
   se.detail,
@@ -145,35 +157,20 @@ SELECT
   se.is_classified,
   se.is_eligible_for_points
 FROM session_entry se
-JOIN session ses        ON ses.id = se.session_id
-LEFT JOIN roundentry re ON re.id = se.round_entry_id
+JOIN session ses         ON ses.id = se.session_id
+LEFT JOIN roundentry re  ON re.id = se.round_entry_id
 LEFT JOIN team_driver td ON td.id = re.team_driver_id
-LEFT JOIN team t        ON t.id = td.team_id
-LEFT JOIN driver d      ON d.id = td.driver_id
-LEFT JOIN round rnd     ON rnd.id = re.round_id
-LEFT JOIN season sn     ON sn.id = rnd.season_id
+LEFT JOIN team t         ON t.id = td.team_id
+LEFT JOIN driver d       ON d.id = td.driver_id
+LEFT JOIN round rnd      ON rnd.id = re.round_id
+LEFT JOIN season sn      ON sn.id = rnd.season_id
 WHERE ses.type = 'R'
 """
 
-DRIVER_AS = "COALESCE(d.forename, '') || ' ' || COALESCE(d.surname, '') AS driver"
-DRIVER_FROM = ("FROM results_flat rf "
-               "LEFT JOIN driver d ON d.id = rf.driver_id")
-
-
-def q_results(select_cols: str, where: str, order_by: str) -> str:
-    """Wrap a query over results_flat so it can use the bare driver columns."""
-    return f"""
-SELECT rf.year, rf.circuit, {select_cols},
-       rf.team, rf.position, rf.points
-{DRIVER_FROM}
-WHERE {where}
-ORDER BY {order_by}
-"""
-
-
 # ---------------------------------------------------------------------------
 # Queries (one per placeholder) — (db_key, sql, kind)
-# kind: "table" -> HTML table, "scalar" -> single value, "grid" -> special
+# kind: "table" -> HTML table, "scalar" -> single value, "computed" -> built
+# in build_context() from the inventory rather than a single SQL statement
 # ---------------------------------------------------------------------------
 
 def build_queries() -> dict:
@@ -191,20 +188,25 @@ def build_queries() -> dict:
         "tbl_pit_stop_head": (
             "raw", "SELECT * FROM pit_stop LIMIT 5", "table"),
 
-        # -- Winner uniqueness -------------------------------------------------
-        # Per-session count of drivers recorded in position 1 (R: session
-        # filter + left_join + count + filter)
+        # -- Winner uniqueness ------------------------------------------------
+        # Human-readable view: per Grand Prix, how many drivers are recorded
+        # in position 1 (shared drives of the early years). Uses only
+        # schema-confirmed columns: session.round_id -> round.name ->
+        # round.season_id -> season.year.
         "tbl_multi_winner_races": (
             "raw", """
-            SELECT ses.id AS session_id, COUNT(*) AS n_winners
+            SELECT sn.year, rnd.name AS grand_prix, COUNT(*) AS n_winners
             FROM session ses
             JOIN session_entry se ON se.session_id = ses.id
+            JOIN round rnd        ON rnd.id = ses.round_id
+            JOIN season sn        ON sn.id = rnd.season_id
             WHERE ses.type = 'R' AND se.position = 1
-            GROUP BY ses.id
+            GROUP BY sn.year, rnd.name
             HAVING COUNT(*) > 1
-            ORDER BY ses.id""", "table"),
-      
-        # Human-readable year + circuit view of the same races
+            ORDER BY sn.year""", "table"),
+
+        # Year + circuit view over the flattened results (R:
+        # results %>% group_by(year, circuit) %>% filter(position == 1) ...)
         "tbl_multi_winner_details": (
             "raw", """
             SELECT year, circuit, COUNT(*) AS n_winners
@@ -230,20 +232,22 @@ def build_queries() -> dict:
         # Neither integers nor exact halves -> only the 1954 British GP
         # (1/7 shares) and 1955 Argentine GP (4/3 shares) survive
         "tbl_fine_fraction_rows": (
-            "raw", q_results(
-                select_cols=f"d.forename || ' ' || d.surname AS driver",
-                where="rf.points % 1 <> 0 AND rf.points % 1 <> 0.5",
-                order_by="rf.year, rf.circuit, rf.position"), "table"),
+            "raw", """
+            SELECT rf.year, rf.circuit, rf.driver, rf.team,
+                   rf.position, rf.points
+            FROM results_flat rf
+            WHERE rf.points % 1 <> 0 AND rf.points % 1 <> 0.5
+            ORDER BY rf.year, rf.circuit, rf.position""", "table"),
 
         # -- Shared fastest lap, 1954 British GP -------------------------------
         # Fractional part within +/-0.01 of 1/7 (~0.143); tolerance is robust
         # to float noise, and 1/6 (~0.167) / 1/8 (0.125) lie outside the band.
         # fastest_lap_rank is selected to show it is NULL for these rows.
         "tbl_fastest_lap_shared_rows": (
-            "raw", f"""
-            SELECT rf.year, rf.circuit, d.forename || ' ' || d.surname AS driver,
-                   rf.team, rf.position, rf.points, rf.fastest_lap_rank
-            {DRIVER_FROM}
+            "raw", """
+            SELECT rf.year, rf.circuit, rf.driver, rf.team,
+                   rf.position, rf.points, rf.fastest_lap_rank
+            FROM results_flat rf
             WHERE ABS(rf.points % 1 - 1.0/7.0) < 0.01
             ORDER BY rf.circuit, rf.position""", "table"),
 
@@ -257,10 +261,10 @@ def build_queries() -> dict:
         # Exactly ONE row expected (Fangio, Monaco 1956). The prose asserts
         # "exactly once", so anything other than a single row is a red flag.
         "tbl_ineligible_scorers": (
-            "raw", f"""
-            SELECT rf.year, rf.circuit, d.forename || ' ' || d.surname AS driver,
-                   rf.team, rf.position, rf.points, rf.detail, rf.laps_completed
-            {DRIVER_FROM}
+            "raw", """
+            SELECT rf.year, rf.circuit, rf.driver, rf.team,
+                   rf.position, rf.points, rf.detail, rf.laps_completed
+            FROM results_flat rf
             WHERE rf.points IS NOT NULL
               AND rf.is_eligible_for_points = 'f'
               AND rf.points > 0
@@ -268,12 +272,11 @@ def build_queries() -> dict:
 
         # Ferrari entries at the 1956 Monaco GP (context for the above)
         "tbl_ferrari_monaco_1956": (
-            "raw", f"""
-            SELECT d.forename || ' ' || d.surname AS driver,
-                   rf.position, rf.points,
+            "raw", """
+            SELECT rf.driver, rf.position, rf.points,
                    rf.is_eligible_for_points AS eligible,
                    rf.detail, rf.laps_completed
-            {DRIVER_FROM}
+            FROM results_flat rf
             WHERE rf.year = 1956
               AND rf.team = 'Ferrari'
               AND rf.circuit = 'Monaco Grand Prix'
@@ -282,11 +285,11 @@ def build_queries() -> dict:
         # -- Classification / points correspondence -----------------------------
         # Fastest-lap bonus on retired cars; includes Moss, France 1959 (DQ).
         "tbl_unclassified_scorers": (
-            "raw", f"""
-            SELECT rf.year, rf.circuit, d.forename || ' ' || d.surname AS driver,
-                   rf.team, rf.position, rf.points, rf.detail,
+            "raw", """
+            SELECT rf.year, rf.circuit, rf.driver, rf.team,
+                   rf.position, rf.points, rf.detail,
                    rf.fastest_lap_rank
-            {DRIVER_FROM}
+            FROM results_flat rf
             WHERE rf.points IS NOT NULL
               AND rf.is_classified = 'f'
               AND rf.points > 0
@@ -311,7 +314,6 @@ def build_queries() -> dict:
             LIMIT 6""", "table"),
     }
 
-
 # ---------------------------------------------------------------------------
 # Rendering helpers
 # ---------------------------------------------------------------------------
@@ -321,7 +323,6 @@ def df_to_html(df: pd.DataFrame) -> str:
     return df.to_html(index=False, border=0, na_rep="",
                       classes="table table-sm table-striped")
 
-
 def list_tables(con: sqlite3.Connection) -> list[str]:
     """All user tables, skipping SQLite internals (mirrors the R filter)."""
     rows = con.execute(
@@ -330,7 +331,6 @@ def list_tables(con: sqlite3.Connection) -> list[str]:
         "AND name NOT LIKE '\\_%' ESCAPE '\\' "
         "ORDER BY name").fetchall()
     return [r[0] for r in rows]
-
 
 def build_dataset_files_grid(tables: list[str], n_col: int = 3) -> str:
     """
@@ -350,7 +350,6 @@ def build_dataset_files_grid(tables: list[str], n_col: int = 3) -> str:
     df = df.loc[(df != "").any(axis=1)]           # drop fully-empty padding rows
     return df_to_html(df)
 
-
 # ---------------------------------------------------------------------------
 # Main build
 # ---------------------------------------------------------------------------
@@ -367,7 +366,7 @@ def build_context(raw_path: str, ana_path: str) -> dict:
     # ---- computed values first (need the raw connection but not queries) ----
     tables = list_tables(raw_con)
 
-    counts = {t: raw_con.execute(f"SELECT COUNT(*) FROM \"{t}\"").fetchone()[0]
+    counts = {t: raw_con.execute(f'SELECT COUNT(*) FROM "{t}"').fetchone()[0]
               for t in tables}
     total_rows = sum(counts.values())
     # Round to the nearest 10,000 and express in thousands (e.g. 573,402 -> 570)
@@ -400,7 +399,6 @@ def build_context(raw_path: str, ana_path: str) -> dict:
     if ana_con is not None:
         ana_con.close()
     return ctx
-
 
 def render(source_path: str, output_path: str, ctx: dict) -> None:
     md_text = Path(source_path).read_text(encoding="utf-8")
@@ -437,7 +435,6 @@ def render(source_path: str, output_path: str, ctx: dict) -> None:
     Path(output_path).write_text(html, encoding="utf-8")
     print(f"Generated: {output_path}")
 
-
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", default=DEFAULT_SOURCE)
@@ -448,7 +445,6 @@ def main() -> None:
 
     ctx = build_context(args.raw, args.analytics)
     render(args.source, args.output, ctx)
-
 
 if __name__ == "__main__":
     main()

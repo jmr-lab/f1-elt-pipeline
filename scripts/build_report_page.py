@@ -1,0 +1,454 @@
+#!/usr/bin/env python3
+"""
+Build the analysis & transformation report page (site/report.html) from
+docs/report.md.
+
+Dynamic content (row counts, analysis extracts, table heads) is computed
+directly from the SQLite databases produced by the pipeline:
+
+  - dist/jolpica.db   (raw snapshot)  -> Chapter 2 extracts, dataset inventory
+  - dist/formula1.db  (analytics)     -> correction tables, f1summary extract
+
+Usage:
+    python scripts/build_report_page.py [--raw PATH] [--analytics PATH]
+                                        [--source PATH] [--output PATH]
+
+The R equivalent of every query is documented in the companion project's
+analysis script; SQL column names mirror the Jolpica export schema.
+"""
+
+import argparse
+import math
+import re
+import sqlite3
+from pathlib import Path
+
+import markdown
+import pandas as pd
+
+# ---------------------------------------------------------------------------
+# Paths (defaults match the GitHub Actions working tree)
+# ---------------------------------------------------------------------------
+
+DEFAULT_SOURCE = "docs/report.md"
+DEFAULT_RAW_DB = "dist/jolpica.db"
+DEFAULT_ANALYTICS_DB = "dist/formula1.db"
+DEFAULT_OUTPUT = "site/report.html"
+
+PLACEHOLDER_RE = re.compile(r"\{\{\s*(\w+)\s*\}\}")
+
+# ---------------------------------------------------------------------------
+# Shared HTML scaffold — same theme as build_adr_site.py / index.html
+# ---------------------------------------------------------------------------
+
+HEADER_HTML = """
+  <header class="hero py-5">
+    <div class="container py-3">
+      <span class="badge text-bg-light text-dark mb-3">Formula 1 Data Project</span>
+      <h1 class="display-5 fw-bold">Explore the data</h1>
+      <p class="lead mb-0">
+        Data quality review and the construction of the analytical schema.
+      </p>
+    </div>
+  </header>
+"""
+
+BASE_TEMPLATE = """<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#f8f9fa">
+  <title>Analysis &amp; Transformation - F1 Data Project</title>
+
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link
+    href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css"
+    rel="stylesheet"
+    integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB"
+    crossorigin="anonymous">
+
+  <style>
+    body {{ background: #f4f6f9; }}
+    .resource-card {{ transition: transform 160ms ease, box-shadow 160ms ease; }}
+    .resource-card:hover {{ transform: translateY(-4px); box-shadow: 0 1rem 2rem rgba(0, 0, 0, 0.12); }}
+    .hero {{ background: linear-gradient(135deg, #15151e, #e10600); color: white; }}
+    article {{ max-width: 1000px; margin: 0 auto; padding: 2rem; background: white;
+               border-radius: 0.5rem; box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.08); }}
+    h1 {{ color: #15151e; border-bottom: 3px solid #e10600; padding-bottom: 0.5rem; }}
+    h2 {{ color: #15151e; margin-top: 2.5rem; }}
+    code {{ background: #f8f9fa; padding: 0.125rem 0.375rem; border-radius: 0.25rem; }}
+    pre {{ background: #f8f9fa; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; }}
+    /* pandas tables carry Bootstrap classes (table table-sm table-striped) */
+    table {{ width: 100%; border-collapse: collapse; margin: 1.5rem 0; font-size: 0.92rem; }}
+    th, td {{ padding: 0.4rem 0.6rem; border: 1px solid #dee2e6; text-align: left; }}
+    th {{ background: #f8f9fa; }}
+    blockquote {{ border-left: 4px solid #e10600; padding: 0.5rem 1rem;
+                 background: #f8f9fa; border-radius: 0 0.25rem 0.25rem 0; }}
+    blockquote p {{ margin-bottom: 0; }}
+    figure {{ margin: 2rem 0; }}
+    figure img {{ max-width: 100%; height: auto; border-radius: 0.5rem;
+                 box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.12); }}
+    figcaption {{ color: #6c757d; font-size: 0.9rem; margin-top: 0.5rem; text-align: center; }}
+    .breadcrumb-nav {{ padding: 1rem 0; background: white; border-radius: 0.25rem;
+                       margin-bottom: 2rem; }}
+  </style>
+</head>
+<body>
+{HEADER}
+  <main class="container py-5">
+<article>
+<div class="breadcrumb-nav">
+  <nav aria-label="breadcrumb">
+    <ol class="breadcrumb">
+      <li class="breadcrumb-item"><a href="index.html">Home</a></li>
+      <li class="breadcrumb-item active">Analysis &amp; Transformation</li>
+    </ol>
+  </nav>
+</div>
+{content}
+<div class="back-link mt-4 pt-3 border-top">
+  <a href="index.html" class="btn btn-outline-secondary">&larr; Back to home</a>
+</div>
+</article>
+  </main>
+
+  <footer class="text-center text-secondary small mt-5">
+    Formula 1 Data Project · Updated automatically by the pipeline
+  </footer>
+</body>
+</html>
+""".replace("{HEADER}", HEADER_HTML)
+
+# ---------------------------------------------------------------------------
+# Flattened race results (port of the R `results` chain, report section 2.4)
+# ---------------------------------------------------------------------------
+# The Jolpica export spreads a driver's race result across five tables
+# (session_entry -> session / roundentry -> team_driver -> round / team /
+# driver / season). This temp view flattens it, restricted to Grand Prix
+# sessions ("R"), exactly like the R dplyr chain it replaces.
+
+RESULTS_VIEW_SQL = """
+CREATE TEMP VIEW results_flat AS
+SELECT
+  se.id,
+  sn.year,
+  rnd.name           AS circuit,
+  d.forename,
+  d.surname,
+  t.name             AS team,
+  se.position,
+  se.points,
+  se.detail,
+  se.laps_completed,
+  se.fastest_lap_rank,
+  se.is_classified,
+  se.is_eligible_for_points
+FROM session_entry se
+JOIN session ses        ON ses.id = se.session_id
+LEFT JOIN roundentry re ON re.id = se.round_entry_id
+LEFT JOIN team_driver td ON td.id = re.team_driver_id
+LEFT JOIN team t        ON t.id = td.team_id
+LEFT JOIN driver d      ON d.id = td.driver_id
+LEFT JOIN round rnd     ON rnd.id = re.round_id
+LEFT JOIN season sn     ON sn.id = rnd.season_id
+WHERE ses.type = 'R'
+"""
+
+DRIVER_AS = "COALESCE(d.forename, '') || ' ' || COALESCE(d.surname, '') AS driver"
+DRIVER_FROM = ("FROM results_flat rf "
+               "LEFT JOIN driver d ON d.id = rf.driver_id")
+
+
+def q_results(select_cols: str, where: str, order_by: str) -> str:
+    """Wrap a query over results_flat so it can use the bare driver columns."""
+    return f"""
+SELECT rf.year, rf.circuit, {select_cols},
+       rf.team, rf.position, rf.points
+{DRIVER_FROM}
+WHERE {where}
+ORDER BY {order_by}
+"""
+
+
+# ---------------------------------------------------------------------------
+# Queries (one per placeholder) — (db_key, sql, kind)
+# kind: "table" -> HTML table, "scalar" -> single value, "grid" -> special
+# ---------------------------------------------------------------------------
+
+def build_queries() -> dict:
+    return {
+        # -- Section: Pipeline ------------------------------------------------
+        # ~X K rows inline (rounded to nearest 10K like the R helper)
+        "total_rows_k": ("raw", None, "computed"),
+
+        # 3-column grid of the 18 input CSV files (built from the inventory)
+        "tbl_dataset_files": ("raw", None, "computed"),
+
+        # -- Section: Quick analysis, a first look ---------------------------
+        "tbl_season_head": (
+            "raw", "SELECT * FROM season LIMIT 5", "table"),
+        "tbl_pit_stop_head": (
+            "raw", "SELECT * FROM pit_stop LIMIT 5", "table"),
+
+        # -- Winner uniqueness -------------------------------------------------
+        # Per-session count of drivers recorded in position 1 (R: session
+        # filter + left_join + count + filter)
+        "tbl_multi_winner_races": (
+            "raw", """
+            SELECT ses.id, ses.name AS session_name, COUNT(*) AS n_winners
+            FROM session ses
+            JOIN session_entry se ON se.session_id = ses.id
+            WHERE ses.type = 'R' AND se.position = 1
+            GROUP BY ses.id
+            HAVING COUNT(*) > 1
+            ORDER BY ses.id""", "table"),
+
+        # Human-readable year + circuit view of the same races
+        "tbl_multi_winner_details": (
+            "raw", """
+            SELECT year, circuit, COUNT(*) AS n_winners
+            FROM results_flat
+            WHERE position = 1
+            GROUP BY year, circuit
+            HAVING COUNT(*) > 1
+            ORDER BY year, circuit""", "table"),
+
+        # -- Fractional point values -------------------------------------------
+        # All non-integer points grouped by fractional part. ROUND(x, 3)
+        # normalises the float noise of the 1/7 shares, exactly like the
+        # R mutate(round(points %% 1, 3)).
+        "tbl_fractional_points_survey": (
+            "raw", """
+            SELECT ROUND(points % 1, 3) AS fractional_part,
+                   COUNT(*) AS n_rows
+            FROM session_entry
+            WHERE points IS NOT NULL AND points % 1 <> 0
+            GROUP BY fractional_part
+            ORDER BY n_rows DESC""", "table"),
+
+        # Neither integers nor exact halves -> only the 1954 British GP
+        # (1/7 shares) and 1955 Argentine GP (4/3 shares) survive
+        "tbl_fine_fraction_rows": (
+            "raw", q_results(
+                select_cols=f"d.forename || ' ' || d.surname AS driver",
+                where="rf.points % 1 <> 0 AND rf.points % 1 <> 0.5",
+                order_by="rf.year, rf.circuit, rf.position"), "table"),
+
+        # -- Shared fastest lap, 1954 British GP -------------------------------
+        # Fractional part within +/-0.01 of 1/7 (~0.143); tolerance is robust
+        # to float noise, and 1/6 (~0.167) / 1/8 (0.125) lie outside the band.
+        # fastest_lap_rank is selected to show it is NULL for these rows.
+        "tbl_fastest_lap_shared_rows": (
+            "raw", f"""
+            SELECT rf.year, rf.circuit, d.forename || ' ' || d.surname AS driver,
+                   rf.team, rf.position, rf.points, rf.fastest_lap_rank
+            {DRIVER_FROM}
+            WHERE ABS(rf.points % 1 - 1.0/7.0) < 0.01
+            ORDER BY rf.circuit, rf.position""", "table"),
+
+        # Fastest-lap coverage boundary (expected: 1958)
+        "first_fastest_lap_season": (
+            "raw",
+            "SELECT MIN(year) FROM results_flat "
+            "WHERE fastest_lap_rank IS NOT NULL", "scalar"),
+
+        # -- Eligibility / points correspondence --------------------------------
+        # Exactly ONE row expected (Fangio, Monaco 1956). The prose asserts
+        # "exactly once", so anything other than a single row is a red flag.
+        "tbl_ineligible_scorers": (
+            "raw", f"""
+            SELECT rf.year, rf.circuit, d.forename || ' ' || d.surname AS driver,
+                   rf.team, rf.position, rf.points, rf.detail, rf.laps_completed
+            {DRIVER_FROM}
+            WHERE rf.points IS NOT NULL
+              AND rf.is_eligible_for_points = 'f'
+              AND rf.points > 0
+            ORDER BY rf.year, rf.circuit""", "table"),
+
+        # Ferrari entries at the 1956 Monaco GP (context for the above)
+        "tbl_ferrari_monaco_1956": (
+            "raw", f"""
+            SELECT d.forename || ' ' || d.surname AS driver,
+                   rf.position, rf.points,
+                   rf.is_eligible_for_points AS eligible,
+                   rf.detail, rf.laps_completed
+            {DRIVER_FROM}
+            WHERE rf.year = 1956
+              AND rf.team = 'Ferrari'
+              AND rf.circuit = 'Monaco Grand Prix'
+            ORDER BY rf.position""", "table"),
+
+        # -- Classification / points correspondence -----------------------------
+        # Fastest-lap bonus on retired cars; includes Moss, France 1959 (DQ).
+        "tbl_unclassified_scorers": (
+            "raw", f"""
+            SELECT rf.year, rf.circuit, d.forename || ' ' || d.surname AS driver,
+                   rf.team, rf.position, rf.points, rf.detail,
+                   rf.fastest_lap_rank
+            {DRIVER_FROM}
+            WHERE rf.points IS NOT NULL
+              AND rf.is_classified = 'f'
+              AND rf.points > 0
+            ORDER BY rf.year, rf.circuit""", "table"),
+
+        # -- Nationality ----------------------------------------------------------
+        "tbl_team_nationality_head": (
+            "raw", "SELECT name, nationality FROM team LIMIT 6", "table"),
+
+        # -- Transformation chapter (analytics DB) --------------------------------
+        "tbl_driver_nat_corr_head": (
+            "ana", "SELECT * FROM driver_nationality_corrections LIMIT 6",
+            "table"),
+        "tbl_team_nat_corr_head": (
+            "ana", "SELECT * FROM team_nationality_corrections LIMIT 6",
+            "table"),
+        "tbl_f1summary_head": (
+            "ana", """
+            SELECT resultId, positionOrder, points, year, circuit,
+                   driverName, driverAge, constructorName
+            FROM f1summary
+            LIMIT 6""", "table"),
+    }
+
+
+# ---------------------------------------------------------------------------
+# Rendering helpers
+# ---------------------------------------------------------------------------
+
+def df_to_html(df: pd.DataFrame) -> str:
+    """Render a data frame as a Bootstrap-styled table (pd.NA -> empty)."""
+    return df.to_html(index=False, border=0, na_rep="",
+                      classes="table table-sm table-striped")
+
+
+def list_tables(con: sqlite3.Connection) -> list[str]:
+    """All user tables, skipping SQLite internals (mirrors the R filter)."""
+    rows = con.execute(
+        "SELECT name FROM sqlite_master "
+        "WHERE type = 'table' AND name NOT LIKE 'sqlite_%' "
+        "AND name NOT LIKE '\\_%' ESCAPE '\\' "
+        "ORDER BY name").fetchall()
+    return [r[0] for r in rows]
+
+
+def build_dataset_files_grid(tables: list[str], n_col: int = 3) -> str:
+    """
+    Lay the export files out in an n-column grid, filling COLUMN by column
+    (alphabetical order reads top-to-bottom, left-to-right), exactly like
+    the R matrix(files, byrow = FALSE) construction.
+    """
+    files = [f"{t}.csv" for t in tables]
+    n_row = math.ceil(len(files) / n_col)
+    files += [""] * (n_row * n_col - len(files))
+
+    grid = {}
+    for col in range(n_col):
+        grid[col] = files[col * n_row:(col + 1) * n_row]
+
+    df = pd.DataFrame({f"Files {i + 1}": grid[i] for i in range(n_col)})
+    df = df.loc[(df != "").any(axis=1)]           # drop fully-empty padding rows
+    return df_to_html(df)
+
+
+# ---------------------------------------------------------------------------
+# Main build
+# ---------------------------------------------------------------------------
+
+def build_context(raw_path: str, ana_path: str) -> dict:
+    raw_con = sqlite3.connect(raw_path)
+    raw_con.execute(RESULTS_VIEW_SQL)            # temp view on the raw DB
+
+    ana_con = sqlite3.connect(ana_path) if Path(ana_path).exists() else None
+
+    cons = {"raw": raw_con, "ana": ana_con}
+    ctx: dict = {}
+
+    # ---- computed values first (need the raw connection but not queries) ----
+    tables = list_tables(raw_con)
+
+    counts = {t: raw_con.execute(f"SELECT COUNT(*) FROM \"{t}\"").fetchone()[0]
+              for t in tables}
+    total_rows = sum(counts.values())
+    # Round to the nearest 10,000 and express in thousands (e.g. 573,402 -> 570)
+    ctx["total_rows_k"] = str(int(round(total_rows / 1000, -1)))
+
+    ctx["tbl_dataset_files"] = build_dataset_files_grid(tables)
+
+    # ---- everything driven by the query dictionary -------------------------
+    for name, (db_key, sql, kind) in build_queries().items():
+        if kind == "computed":
+            continue                              # handled above
+
+        con = cons[db_key]
+        if con is None:
+            raise RuntimeError(
+                f"Query '{name}' needs the analytical DB, but {ana_path} "
+                "was not found.")
+
+        if kind == "scalar":
+            value = con.execute(sql).fetchone()[0]
+            if value is None:
+                raise RuntimeError(
+                    f"Scalar query '{name}' returned no value — the prose "
+                    "relies on it.")
+            ctx[name] = str(value)
+        else:                                     # table
+            ctx[name] = df_to_html(pd.read_sql(sql, con))
+
+    raw_con.close()
+    if ana_con is not None:
+        ana_con.close()
+    return ctx
+
+
+def render(source_path: str, output_path: str, ctx: dict) -> None:
+    md_text = Path(source_path).read_text(encoding="utf-8")
+
+    # Substitute placeholders; unknown names must fail loudly — a literal
+    # "{{ ... }}" leaking into the published page would go unnoticed.
+    found = set()
+
+    def substitute(match: re.Match) -> str:
+        name = match.group(1)
+        found.add(name)
+        try:
+            return ctx[name]
+        except KeyError:
+            raise RuntimeError(
+                f"Report placeholder '{name}' has no query defined. Add it "
+                "to build_queries() or fix the spelling in the markdown.") \
+                from None
+
+    md_text = PLACEHOLDER_RE.sub(substitute, md_text)
+
+    unused = sorted(set(ctx) - found)
+    if unused:
+        print(f"WARNING: computed values never used in the markdown: "
+              f"{', '.join(unused)}")
+
+    body = markdown.markdown(
+        md_text,
+        extensions=["fenced_code", "tables", "toc", "attr_list"],
+    )
+
+    html = BASE_TEMPLATE.replace("{content}", body)
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
+    Path(output_path).write_text(html, encoding="utf-8")
+    print(f"Generated: {output_path}")
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--source", default=DEFAULT_SOURCE)
+    parser.add_argument("--raw", default=DEFAULT_RAW_DB)
+    parser.add_argument("--analytics", default=DEFAULT_ANALYTICS_DB)
+    parser.add_argument("--output", default=DEFAULT_OUTPUT)
+    args = parser.parse_args()
+
+    ctx = build_context(args.raw, args.analytics)
+    render(args.source, args.output, ctx)
+
+
+if __name__ == "__main__":
+    main()

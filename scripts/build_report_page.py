@@ -330,6 +330,29 @@ def df_to_html(df: pd.DataFrame) -> str:
     html = re.sub(r'\s*style="[^"]*"', "", html)
     return f'<div class="table-responsive">\n{html}</div>'
 
+# Matches only the bare <table> elements emitted by python-markdown for
+# tables authored directly in the markdown. Dynamic (SQL-derived) tables
+# arrive as <table border="0" class="dataframe ..."> from pandas and are
+# therefore never touched by this pattern — they are styled exactly once,
+# inside df_to_html().
+TABLE_RE = re.compile(r"<table>.*?</table>", re.DOTALL)
+
+def decorate_static_tables(html: str) -> str:
+    """
+    Give the Markdown-authored tables the same Bootstrap treatment as the
+    SQL-derived ones: dark header row, bordered, striped, tight, inside a
+    responsive wrapper (which also applies the width:auto / centring rule).
+    """
+    def wrap(match: re.Match) -> str:
+        inner = match.group(0)
+        inner = inner.replace(
+            "<table>",
+            '<table class="table table-sm table-striped table-bordered">', 1)
+        inner = inner.replace("<thead>", '<thead class="table-dark">')
+        return f'<div class="table-responsive">\n{inner}</div>'
+
+    return TABLE_RE.sub(wrap, html)
+
 def list_tables(con: sqlite3.Connection) -> list[str]:
     """All user tables, skipping SQLite internals (mirrors the R filter)."""
     rows = con.execute(
@@ -353,7 +376,9 @@ def build_dataset_files_grid(tables: list[str], n_col: int = 3) -> str:
     for col in range(n_col):
         grid[col] = files[col * n_row:(col + 1) * n_row]
 
-    df = pd.DataFrame({f"Files {i + 1}": grid[i] for i in range(n_col)})
+    # Header: label the first column, leave the continuation columns unnamed
+    col_names = ["Files"] + [""] * (n_col - 1)
+    df = pd.DataFrame(grid).rename(columns=col_names)
     df = df.loc[(df != "").any(axis=1)]           # drop fully-empty padding rows
     return df_to_html(df)
 
@@ -436,6 +461,7 @@ def render(source_path: str, output_path: str, ctx: dict) -> None:
         md_text,
         extensions=["fenced_code", "tables", "toc", "attr_list"],
     )
+    body = decorate_static_tables(body)
 
     html = BASE_TEMPLATE.replace("{content}", body)
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)

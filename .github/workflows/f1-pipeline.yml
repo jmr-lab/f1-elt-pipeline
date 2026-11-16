@@ -443,17 +443,33 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install markdown converter
-        run: pip install markdown
+      - name: Install dependencies
+        run: pip install markdown pandas                         # NEW: pandas for report tables
+
+      - name: Download raw database
+        uses: actions/download-artifact@v4                        # NEW: report Chapter 2 source
+        with:
+          name: jolpica-db
+          path: dist
+
+      - name: Download analytical database
+        uses: actions/download-artifact@v4                        # NEW: report Chapter 3 source
+        with:
+          name: formula1-db
+          path: dist
 
       - name: Build ADR documentation
         run: python scripts/build_adr_site.py
 
-      - name: Copy landing page and favicon
-        run: |
+      - name: Build report page
+        run: python scripts/build_report_page.py                  # NEW: site/report.html from docs/report.md
+
+      - name: Copy landing page, favicon and figures
+        run: |                                                    # NEW: figures for the report
           mkdir -p site
           cp pages/index.html site/index.html
           cp pages/favicon.png site/favicon.png
+          cp -r pages/img site/img
 
       - name: Download dbt docs
         uses: actions/download-artifact@v4

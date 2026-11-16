@@ -71,7 +71,7 @@ The pipeline performs the following steps:
 The two branches of the pipeline are intentionally decoupled: a Databricks
 outage cannot block the local SQLite build and release.
 
-![Pipeline architecture: Jolpica → SQLite → dbt / Databricks](img/pipeline.png)
+![Pipeline architecture: Jolpica → SQLite → dbt / Databricks](images/report/pipeline.png)
 *Pipeline architecture: Jolpica → SQLite → dbt / Databricks.*
 
 Two design decisions are worth highlighting, as they affect the reproducibility

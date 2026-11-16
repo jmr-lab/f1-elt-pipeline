@@ -100,6 +100,11 @@ BASE_TEMPLATE = """<!doctype html>
     article img { display: block; max-width: 100%; height: auto; margin: 2rem auto;
               border-radius: 0.5rem;
               box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.12); }
+    .table-responsive .table {
+      width: auto;            /* shrink to fit content, don't stretch */
+      max-width: 100%;        /* ...but never overflow the article */
+      margin-left: 0;         /* keep tables anchored left with the prose */
+    }
   </style>
 </head>
 <body>
@@ -317,10 +322,11 @@ def build_queries() -> dict:
 def df_to_html(df: pd.DataFrame) -> str:
     """Render a data frame as a Bootstrap table with a dark header row."""
     html = df.to_html(index=False, border=0, na_rep="",
-                      classes="table table-sm table-striped")
-    # pandas always emits a bare <thead>; promote it to the dark variant
+                      classes="table table-sm table-striped table-bordered")
     html = html.replace("<thead>", '<thead class="table-dark">', 1)
-    # keep wide tables (e.g. the season/pit_stop heads) scrollable on mobile
+    # pandas inlines text-align styles on numeric columns; drop them so the
+    # stylesheet's left-alignment applies uniformly
+    html = re.sub(r'\s*style="[^"]*"', "", html)
     return f'<div class="table-responsive">\n{html}</div>'
 
 def list_tables(con: sqlite3.Connection) -> list[str]:

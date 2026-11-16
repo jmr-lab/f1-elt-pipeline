@@ -196,14 +196,14 @@ def build_queries() -> dict:
         # filter + left_join + count + filter)
         "tbl_multi_winner_races": (
             "raw", """
-            SELECT ses.id, ses.name AS session_name, COUNT(*) AS n_winners
+            SELECT ses.id AS session_id, COUNT(*) AS n_winners
             FROM session ses
             JOIN session_entry se ON se.session_id = ses.id
             WHERE ses.type = 'R' AND se.position = 1
             GROUP BY ses.id
             HAVING COUNT(*) > 1
             ORDER BY ses.id""", "table"),
-
+      
         # Human-readable year + circuit view of the same races
         "tbl_multi_winner_details": (
             "raw", """

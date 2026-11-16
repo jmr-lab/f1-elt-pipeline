@@ -378,7 +378,7 @@ def build_dataset_files_grid(tables: list[str], n_col: int = 3) -> str:
 
     # Header: label the first column, leave the continuation columns unnamed
     col_names = ["Files"] + [""] * (n_col - 1)
-    df = pd.DataFrame(grid).rename(columns=col_names)
+    df = pd.DataFrame(grid, columns=col_names)
     df = df.loc[(df != "").any(axis=1)]           # drop fully-empty padding rows
     return df_to_html(df)
 

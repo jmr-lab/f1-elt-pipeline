@@ -80,30 +80,23 @@ BASE_TEMPLATE = """<!doctype html>
     crossorigin="anonymous">
 
   <style>
-    body {{ background: #f4f6f9; }}
-    .resource-card {{ transition: transform 160ms ease, box-shadow 160ms ease; }}
-    .resource-card:hover {{ transform: translateY(-4px); box-shadow: 0 1rem 2rem rgba(0, 0, 0, 0.12); }}
-    .hero {{ background: linear-gradient(135deg, #15151e, #e10600); color: white; }}
-    article {{ max-width: 1000px; margin: 0 auto; padding: 2rem; background: white;
-               border-radius: 0.5rem; box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.08); }}
-    h1 {{ color: #15151e; border-bottom: 3px solid #e10600; padding-bottom: 0.5rem; }}
-    h2 {{ color: #15151e; margin-top: 2.5rem; }}
-    code {{ background: #f8f9fa; padding: 0.125rem 0.375rem; border-radius: 0.25rem; }}
-    pre {{ background: #f8f9fa; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; }}
-    /* pandas tables carry Bootstrap classes (table table-sm table-striped) */
-    table {{ width: 100%; border-collapse: collapse; margin: 1.5rem 0; font-size: 0.92rem; }}
-    th, td {{ padding: 0.4rem 0.6rem; border: 1px solid #dee2e6; text-align: left; }}
-    th {{ background: #f8f9fa; }}
-    blockquote {{ border-left: 4px solid #e10600; padding: 0.5rem 1rem;
-                 background: #f8f9fa; border-radius: 0 0.25rem 0.25rem 0; }}
-    blockquote p {{ margin-bottom: 0; }}
-    figure {{ margin: 2rem 0; }}
-    figure img {{ max-width: 100%; height: auto; border-radius: 0.5rem;
-                 box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.12); }}
-    figcaption {{ color: #6c757d; font-size: 0.9rem; margin-top: 0.5rem; text-align: center; }}
-    .breadcrumb-nav {{ padding: 1rem 0; background: white; border-radius: 0.25rem;
-                       margin-bottom: 2rem; }}
-    .back-link {{ margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #dee2e6; }}
+    body {
+      background: #f4f6f9;
+    }
+
+    .hero {
+      background: linear-gradient(135deg, #15151e, #e10600);
+      color: white;
+    }
+
+    .resource-card {
+      transition: transform 160ms ease, box-shadow 160ms ease;
+    }
+
+    .resource-card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 1rem 2rem rgba(0, 0, 0, 0.12);
+    }
   </style>
 </head>
 <body>

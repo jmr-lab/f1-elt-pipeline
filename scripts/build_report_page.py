@@ -103,7 +103,8 @@ BASE_TEMPLATE = """<!doctype html>
     .table-responsive .table {
       width: auto;            /* shrink to fit content, don't stretch */
       max-width: 100%;        /* ...but never overflow the article */
-      margin-left: 0;         /* keep tables anchored left with the prose */
+      margin-left: auto;      /* centre within the article */
+      margin-right: auto;
     }
   </style>
 </head>

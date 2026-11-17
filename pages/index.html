@@ -31,6 +31,17 @@
       transform: translateY(-4px);
       box-shadow: 0 1rem 2rem rgba(0, 0, 0, 0.12);
     }
+
+    .section-label {
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-weight: 600;
+      font-size: 0.8rem;
+      color: #6c757d;
+      border-bottom: 1px solid #dee2e6;
+      padding-bottom: 0.35rem;
+      margin-bottom: 1.25rem;
+    }
   </style>
 </head>
 <body>
@@ -46,7 +57,7 @@
 
   <main class="container py-5">
     <section class="mb-5" aria-labelledby="workflow-title">
-      <h2 class="h4 mb-3">About this project</h2>
+      <h2 class="h4 mb-3" id="workflow-title">About this project</h2>
 
       <div class="d-flex flex-wrap align-items-stretch justify-content-center gap-2 mb-4">
         <div class="bg-white border rounded-3 p-3 text-center flex-fill">
@@ -84,113 +95,188 @@
       </div>
 
       <p class="text-secondary">
-        This project builds an end-to-end Formula 1 data pipeline using data from Jolpica. The workflow downloads the data as a ZIP archive containing CSV files, loads it into a SQLite database, and publishes the tables to Databricks for analysis and visualisation. Insights from that analysis inform the dbt transformations and documentation. A summary view makes the transformed data and results easier to explore. The workflow then retrieves the dashboard created in Databricks and publishes it alongside the dbt documentation on GitHub Pages.
+        This project builds an end-to-end Formula 1 data pipeline using data from
+        Jolpica. The workflow downloads the data as a ZIP archive containing CSV
+        files, loads it into a SQLite database, and publishes the tables to
+        Databricks for analysis and visualisation. Insights from that analysis
+        inform the dbt transformations and documentation. A summary view makes
+        the transformed data and results easier to explore. The workflow then
+        retrieves the dashboard created in Databricks and publishes it alongside
+        the dbt documentation on GitHub Pages.
       </p>
       <p class="text-secondary">
-        One current transformation accounts for changes in nationality across seasons, so drivers and teams can be represented with the appropriate flag for each period. For example, Bertrand Gachot raced under both French and Belgian flags, while Alfa Romeo has competed under Italian and Swiss flags, and Renault under French and British flags.
+        The database produced here serves one primary consumer: the
+        <a href="https://jmr-lab.github.io/Formula-1/">companion Formula&nbsp;1
+        analytics project</a>, where it powers exploratory data analysis and the
+        GOAT (greatest-of-all-time) modelling. Working with the raw export
+        quickly surfaced a number of data-quality issues — nationality
+        retrojection, missing fastest-lap coverage before 1958, and several
+        historical quirks worth verifying rather than "fixing" — which are
+        documented in detail in
+        <a href="report.html#analysis">the data-quality review</a>. Rather than
+        patching them privately, this project handles them openly in the
+        transformation layer.
       </p>
       <p class="text-secondary">
-        The resulting SQLite database is also used by the companion project for exploratory data analysis (EDA) and GOAT modelling.
+        If Jolpica addresses these issues at the source in the future, this
+        pipeline remains useful: its role would shift from correcting the data
+        to providing convenience views — season-scoped nationality resolution,
+        flat summary tables, derived attributes — that make the database
+        immediately usable for analysis without reimplementing the join logic
+        in every query.
       </p>
 
     </section>
 
-    <div class="row g-4">
+    <div class="section-label">Report</div>
+    <div class="row g-4 mb-4">
 
-	    <div class="col-12 col-md-6">
-	      <section class="card resource-card h-100 border-0 shadow-sm">
-		    <div class="card-body p-4">
-		      <p class="text-uppercase small fw-semibold text-secondary mb-2">
-			    Data model
-		      </p>
-		      <h2 class="h4 card-title">ERD diagram</h2>
-		      <p class="card-text text-secondary">
-			    Explore the relationships between the project’s data tables.
-		      </p>
-		      <a class="btn btn-dark" href="dbt/erd.html" target="_blank" rel="noopener noreferrer">View ERD</a>
-		    </div>
-	      </section>
-	    </div>
+      <div class="col-12 col-md-6">
+        <section class="card resource-card h-100 border-0 shadow-sm">
+          <div class="card-body p-4">
+            <p class="text-uppercase small fw-semibold text-secondary mb-2">
+              Report
+            </p>
+            <h2 class="h4 card-title">Data quality review</h2>
+            <p class="card-text text-secondary">
+              A documented inspection of the raw Jolpica export: shared drives,
+              fractional points, coverage gaps and nationality limitations.
+            </p>
+            <a class="btn btn-dark" href="report.html#analysis">Read the review</a>
+          </div>
+        </section>
+      </div>
 
-        <div class="col-12 col-md-6">
-          <section class="card resource-card h-100 border-0 shadow-sm">
-            <div class="card-body p-4">
-              <p class="text-uppercase small fw-semibold text-secondary mb-2">
-                Documentation
-              </p>
-              <h2 class="h4 card-title">dbt documentation</h2>
-              <p class="card-text text-secondary">
-                Explore the data models, sources, and transformation lineage.
-              </p>
-              <a class="btn btn-secondary" href="dbt/" target="_blank" rel="noopener noreferrer">Open dbt docs</a>
-            </div>
-          </section>
-        </div>
+      <div class="col-12 col-md-6">
+        <section class="card resource-card h-100 border-0 shadow-sm">
+          <div class="card-body p-4">
+            <p class="text-uppercase small fw-semibold text-secondary mb-2">
+              Report
+            </p>
+            <h2 class="h4 card-title">The analytical schema</h2>
+            <p class="card-text text-secondary">
+              How the pipeline transforms the raw export: nationality
+              corrections, fastest-lap enrichment, and the f1summary view.
+            </p>
+            <a class="btn btn-dark" href="report.html#transformation">Read the chapter</a>
+          </div>
+        </section>
+      </div>
 
-        <div class="col-12 col-md-6">
-          <section class="card resource-card h-100 border-0 shadow-sm">
-            <div class="card-body p-4">
-              <p class="text-uppercase small fw-semibold text-secondary mb-2">
-                Analytics
-              </p>
-              <h2 class="h4 card-title">Databricks dashboard</h2>
-              <p class="card-text text-secondary">
-                View the Formula 1 dashboard and explore the results.
-              </p>
-              <a class="btn btn-danger" href="dashboard/" target="_blank" rel="noopener noreferrer">Open dashboard</a>
-            </div>
-          </section>
-        </div>
+    </div>
 
-        <div class="col-12 col-md-6">
-          <section class="card resource-card h-100 border-0 shadow-sm">
-            <div class="card-body p-4">
-              <p class="text-uppercase small fw-semibold text-secondary mb-2">
-                Formula 1
-              </p>
-              <h2 class="h4 card-title">Analytics & GOAT modelling</h2>
-              <p class="card-text text-secondary">
-                Explore the companion project for EDA and analysis.
-              </p>
-              <a class="btn btn-success" href="https://jmr-lab.github.io/Formula-1/">View Project Page</a>
-            </div>
-          </section>
-        </div>
+    <div class="section-label">Data &amp; model</div>
+    <div class="row g-4 mb-4">
 
-		<div class="col-12 col-md-6">
-		  <section class="card resource-card h-100 border-0 shadow-sm">
-		    <div class="card-body p-4">
-			  <p class="text-uppercase small fw-semibold text-secondary mb-2">
-			    Source code
-			  </p>
-			  <h2 class="h4 card-title">GitHub repository</h2>
-			  <p class="card-text text-secondary">
-			    View the project code, workflow, and README.
-			  </p>
-			  <a class="btn btn-outline-dark" href="https://github.com/jmr-lab/f1-elt-pipeline" target="_blank" rel="noopener noreferrer">View on GitHub</a>
-		    </div>
-		  </section>
-	    </div>
+      <div class="col-12 col-md-6">
+        <section class="card resource-card h-100 border-0 shadow-sm">
+          <div class="card-body p-4">
+            <p class="text-uppercase small fw-semibold text-secondary mb-2">
+              Download
+            </p>
+            <h2 class="h4 card-title">Download the database</h2>
+            <p class="card-text text-secondary">
+              Get <code>formula1.db</code>, the transformed analytics database,
+              rebuilt automatically by the latest pipeline run — a single
+              portable SQLite file, no setup required.
+            </p>
+            <a class="btn btn-primary" href="https://github.com/jmr-lab/f1-elt-pipeline/releases/download/data-latest/formula1.db" target="_blank" rel="noopener noreferrer">Download formula1.db</a>
+          </div>
+        </section>
+      </div>
 
-        <div class="col-12 col-md-6">
-          <section class="card resource-card h-100 border-0 shadow-sm">
-            <div class="card-body p-4">
-              <p class="text-uppercase small fw-semibold text-secondary mb-2">
-                Architecture
-              </p>
-              <h2 class="h4 card-title">Decision records</h2>
-              <p class="card-text text-secondary">
-                Review the architectural decisions behind this pipeline.
-              </p>
-              <a class="btn btn-outline-danger" href="adr/">Browse ADRs</a>
-            </div>
-          </section>
-        </div>
-		
+      <div class="col-12 col-md-6">
+        <section class="card resource-card h-100 border-0 shadow-sm">
+          <div class="card-body p-4">
+            <p class="text-uppercase small fw-semibold text-secondary mb-2">
+              Data model
+            </p>
+            <h2 class="h4 card-title">ERD diagram</h2>
+            <p class="card-text text-secondary">
+              Explore the relationships between the project&rsquo;s data tables.
+            </p>
+            <a class="btn btn-dark" href="dbt/erd.html" target="_blank" rel="noopener noreferrer">View ERD</a>
+          </div>
+        </section>
+      </div>
+
+    </div>
+
+    <div class="section-label">Build &amp; docs</div>
+    <div class="row g-4 mb-4">
+
+      <div class="col-12 col-md-6">
+        <section class="card resource-card h-100 border-0 shadow-sm">
+          <div class="card-body p-4">
+            <p class="text-uppercase small fw-semibold text-secondary mb-2">
+              Documentation
+            </p>
+            <h2 class="h4 card-title">dbt documentation</h2>
+            <p class="card-text text-secondary">
+              Explore the data models, sources, and transformation lineage.
+            </p>
+            <a class="btn btn-secondary" href="dbt/" target="_blank" rel="noopener noreferrer">Open dbt docs</a>
+          </div>
+        </section>
+      </div>
+
+      <div class="col-12 col-md-6">
+        <section class="card resource-card h-100 border-0 shadow-sm">
+          <div class="card-body p-4">
+            <p class="text-uppercase small fw-semibold text-secondary mb-2">
+              Architecture
+            </p>
+            <h2 class="h4 card-title">Decision records</h2>
+            <p class="card-text text-secondary">
+              Review the architectural decisions behind this pipeline.
+            </p>
+            <a class="btn btn-outline-danger" href="adr/">Browse ADRs</a>
+          </div>
+        </section>
+      </div>
+
+    </div>
+
+    <div class="section-label">Analysis</div>
+    <div class="row g-4 mb-4">
+
+      <div class="col-12 col-md-6">
+        <section class="card resource-card h-100 border-0 shadow-sm">
+          <div class="card-body p-4">
+            <p class="text-uppercase small fw-semibold text-secondary mb-2">
+              Analytics
+            </p>
+            <h2 class="h4 card-title">Databricks dashboard</h2>
+            <p class="card-text text-secondary">
+              View the Formula 1 dashboard and explore the results.
+            </p>
+            <a class="btn btn-danger" href="dashboard/" target="_blank" rel="noopener noreferrer">Open dashboard</a>
+          </div>
+        </section>
+      </div>
+
+      <div class="col-12 col-md-6">
+        <section class="card resource-card h-100 border-0 shadow-sm">
+          <div class="card-body p-4">
+            <p class="text-uppercase small fw-semibold text-secondary mb-2">
+              Formula 1
+            </p>
+            <h2 class="h4 card-title">Analytics &amp; GOAT modelling</h2>
+            <p class="card-text text-secondary">
+              Explore the companion project for EDA and analysis.
+            </p>
+            <a class="btn btn-success" href="https://jmr-lab.github.io/Formula-1/">View Project Page</a>
+          </div>
+        </section>
+      </div>
+
     </div>
 
     <footer class="text-center text-secondary small mt-5">
-      Formula 1 Data Project
+      <a href="https://github.com/jmr-lab/f1-elt-pipeline" target="_blank" rel="noopener noreferrer">
+        github.com/jmr-lab/f1-elt-pipeline
+      </a>
+      &middot; Formula 1 Data Project
     </footer>
   </main>
 </body>

@@ -222,15 +222,18 @@ def build_queries() -> dict:
             ORDER BY year, circuit""", "table"),
 
         # -- Fractional point values -------------------------------------------
-        # All non-integer points grouped by fractional part. ROUND(x, 3)
-        # normalises the float noise of the 1/7 shares, exactly like the
-        # R mutate(round(points %% 1, 3)).
+        # All non-integer points grouped by fractional part. SQLite's %
+        # operator casts its operands to INTEGER, so the fractional part is
+        # computed explicitly as points - CAST(points AS INTEGER) — the port
+        # of R's points %% 1. ROUND(x, 3) normalises the float noise of the
+        # 1/7 shares, exactly like the R mutate(round(points %% 1, 3)).
         "tbl_fractional_points_survey": (
             "raw", """
-            SELECT ROUND(points % 1, 3) AS fractional_part,
+            SELECT ROUND(points - CAST(points AS INTEGER), 3) AS fractional_part,
                    COUNT(*) AS n_rows
             FROM session_entry
-            WHERE points IS NOT NULL AND points % 1 <> 0
+            WHERE points IS NOT NULL
+              AND points <> CAST(points AS INTEGER)
             GROUP BY fractional_part
             ORDER BY n_rows DESC""", "table"),
 
@@ -241,7 +244,8 @@ def build_queries() -> dict:
             SELECT rf.year, rf.circuit, rf.driver, rf.team,
                    rf.position, rf.points
             FROM results_flat rf
-            WHERE rf.points % 1 <> 0 AND rf.points % 1 <> 0.5
+            WHERE (rf.points - CAST(rf.points AS INTEGER)) <> 0
+              AND (rf.points - CAST(rf.points AS INTEGER)) <> 0.5
             ORDER BY rf.year, rf.circuit, rf.position""", "table"),
 
         # -- Shared fastest lap, 1954 British GP -------------------------------
@@ -253,9 +257,9 @@ def build_queries() -> dict:
             SELECT rf.year, rf.circuit, rf.driver, rf.team,
                    rf.position, rf.points, rf.fastest_lap_rank
             FROM results_flat rf
-            WHERE ABS(rf.points % 1 - 1.0/7.0) < 0.01
+            WHERE ABS((rf.points - CAST(rf.points AS INTEGER)) - 1.0/7.0) < 0.01
             ORDER BY rf.circuit, rf.position""", "table"),
-
+      
         # Fastest-lap coverage boundary (expected: 1958)
         "first_fastest_lap_season": (
             "raw",

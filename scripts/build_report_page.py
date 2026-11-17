@@ -373,8 +373,11 @@ def decorate_static_tables(html: str) -> str:
 
 # Pairs an image paragraph with the italic caption paragraph that follows it
 # (authored as *Caption text* in the markdown) into a proper <figure>.
+#   <p><img ...></p><p><em>Caption</em></p>   (image line, blank line, caption line)
+#   <p><img ...> <em>Caption</em></p>         (image and caption in one paragraph,
+#                                              i.e. no blank line in the markdown)
 FIGURE_RE = re.compile(
-    r'<p>\s*(<img[^>]*>)\s*</p>\s*<p>\s*<em>(.*?)</em>\s*</p>',
+    r'<p>\s*(<img[^>]*>)\s*(?:</p>\s*<p>\s*)?<em>(.*?)</em>\s*</p>',
     re.DOTALL)
 
 def promote_figures(html: str) -> str:

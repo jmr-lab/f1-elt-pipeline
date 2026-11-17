@@ -378,7 +378,10 @@ def build_dataset_files_grid(tables: list[str], n_col: int = 3) -> str:
 
     # Header: label the first column, leave the continuation columns unnamed
     col_names = ["Files"] + [""] * (n_col - 1)
-    df = pd.DataFrame(grid, columns=col_names)
+    # Transpose the column lists into rows — building from a list of tuples
+    # makes the `columns` argument positional (a dict + columns selects by
+    # key, which mismatches and silently produces an empty frame)
+    df = pd.DataFrame(list(zip(*grid.values())), columns=col_names)
     df = df.loc[(df != "").any(axis=1)]           # drop fully-empty padding rows
     return df_to_html(df)
 

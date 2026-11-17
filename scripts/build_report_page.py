@@ -120,6 +120,20 @@ BASE_TEMPLATE = """<!doctype html>
       margin-top: 0.5rem;
     }
     figure { margin: 2rem 0; }
+
+    #scrollToTop {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      z-index: 1030;           /* above Bootstrap sticky elements */
+      display: none;           /* hidden until the reader scrolls down */
+      border-radius: 50%;
+      width: 2.75rem;
+      height: 2.75rem;
+      padding: 0;
+      align-items: center;
+      justify-content: center;
+    }
   </style>
 </head>
 <body>
@@ -141,9 +155,29 @@ BASE_TEMPLATE = """<!doctype html>
 </article>
   </main>
 
+<button id="scrollToTop" class="btn btn-primary shadow" type="button"
+        aria-label="Scroll to top" title="Back to top">
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+       fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
+    <path fill-rule="evenodd"
+          d="M7.646 4.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1-.708.708L8 5.707l-5.646 5.647a.5.5 0 0 1-.708-.708l6-6z"/>
+  </svg>
+</button>
+
   <footer class="text-center text-secondary small mt-5">
     Formula 1 Data Project · Updated automatically by the pipeline
   </footer>
+
+  <script>
+    (() => {
+      const btn = document.getElementById('scrollToTop');
+      const toggle = () => { btn.style.display = window.scrollY > 400 ? 'flex' : 'none'; };
+      btn.addEventListener('click', () =>
+        window.scrollTo({ top: 0, behavior: 'smooth' }));
+      window.addEventListener('scroll', toggle, { passive: true });
+      toggle();
+    })();
+  </script>
 </body>
 </html>
 """.replace("{HEADER}", HEADER_HTML)
@@ -270,7 +304,7 @@ def build_queries() -> dict:
             FROM results_flat rf
             WHERE ABS((rf.points - CAST(rf.points AS INTEGER)) - 1.0/7.0) < 0.01
             ORDER BY rf.circuit, rf.position""", "table"),
-      
+
         # Fastest-lap coverage boundary (expected: 1958)
         "first_fastest_lap_season": (
             "raw",

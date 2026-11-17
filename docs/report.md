@@ -611,7 +611,14 @@ identity, and drivers with confirmed multi-nationality careers such as
 Gachot — each entry traceable to the historical evidence discussed in
 [the data-quality chapter](#analysis).
 
+The driver-level corrections are shown first, illustrating the
+multi-nationality career case that the raw schema cannot express:
+
 {{ tbl_driver_nat_corr_head }}
+
+The team-level corrections follow, covering the two constructor cases —
+Alfa Romeo's pre-reorganisation Italian identity and Renault's
+French/British duality:
 
 {{ tbl_team_nat_corr_head }}
 

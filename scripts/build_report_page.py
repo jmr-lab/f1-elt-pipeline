@@ -109,6 +109,13 @@ BASE_TEMPLATE = """<!doctype html>
       margin-left: auto;      /* centre within the article */
       margin-right: auto;
     }
+    figcaption {
+      text-align: center;
+      color: #6c757d;
+      font-size: 0.9rem;
+      margin-top: 0.5rem;
+    }
+    figure { margin: 2rem 0; }
   </style>
 </head>
 <body>
@@ -360,6 +367,18 @@ def decorate_static_tables(html: str) -> str:
 
     return TABLE_RE.sub(wrap, html)
 
+# Pairs an image paragraph with the italic caption paragraph that follows it
+# (authored as *Caption text* in the markdown) into a proper <figure>.
+FIGURE_RE = re.compile(
+    r'<p>\s*(<img[^>]*>)\s*</p>\s*<p>\s*<em>(.*?)</em>\s*</p>',
+    re.DOTALL)
+
+def promote_figures(html: str) -> str:
+    def wrap(match: re.Match) -> str:
+        img, caption = match.group(1), match.group(2)
+        return f'<figure>{img}<figcaption>{caption}</figcaption></figure>'
+    return FIGURE_RE.sub(wrap, html)
+
 def list_tables(con: sqlite3.Connection) -> list[str]:
     """All user tables, skipping SQLite internals (mirrors the R filter)."""
     rows = con.execute(
@@ -472,6 +491,7 @@ def render(source_path: str, output_path: str, ctx: dict) -> None:
         extensions=["fenced_code", "tables", "toc", "attr_list"],
     )
     body = decorate_static_tables(body)
+    body = promote_figures(body)
 
     html = BASE_TEMPLATE.replace("{content}", body)
     Path(output_path).parent.mkdir(parents=True, exist_ok=True)

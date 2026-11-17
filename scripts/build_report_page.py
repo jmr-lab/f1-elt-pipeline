@@ -128,21 +128,22 @@ BASE_TEMPLATE = """<!doctype html>
       z-index: 1030;
       display: none;                 /* hidden until the reader scrolls down */
       border-radius: 50%;
-      width: 2.25rem;                /* slightly smaller than before */
-      height: 2.25rem;
+      width: 2.5rem;
+      height: 2.5rem;
       padding: 0;
       align-items: center;
       justify-content: center;
-      background: rgba(255, 255, 255, 0.85);   /* translucent, blends with page */
-      color: #6c757d;                          /* Bootstrap muted grey */
-      border: 1px solid rgba(108, 117, 125, 0.35);
-      opacity: 0.65;                 /* discreet at rest... */
-      transition: opacity 160ms ease, transform 160ms ease;
+      background: #6c757d;           /* Bootstrap "secondary", always opaque */
+      color: #ffffff;                /* white chevron */
+      border: none;
+      box-shadow: 0 0.25rem 0.75rem rgba(0, 0, 0, 0.2);
+      transition: background-color 160ms ease, transform 160ms ease;
     }
 
     #scrollToTop:hover {
-      opacity: 1;                    /* ...fully visible on hover */
-      color: #212529;
+      background: #495057;           /* darker grey on hover */
+      color: #ffffff;
+      transform: translateY(-2px);
     }
   </style>
 </head>

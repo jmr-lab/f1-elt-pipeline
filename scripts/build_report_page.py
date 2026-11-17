@@ -125,14 +125,24 @@ BASE_TEMPLATE = """<!doctype html>
       position: fixed;
       bottom: 2rem;
       right: 2rem;
-      z-index: 1030;           /* above Bootstrap sticky elements */
-      display: none;           /* hidden until the reader scrolls down */
+      z-index: 1030;
+      display: none;                 /* hidden until the reader scrolls down */
       border-radius: 50%;
-      width: 2.75rem;
-      height: 2.75rem;
+      width: 2.25rem;                /* slightly smaller than before */
+      height: 2.25rem;
       padding: 0;
       align-items: center;
       justify-content: center;
+      background: rgba(255, 255, 255, 0.85);   /* translucent, blends with page */
+      color: #6c757d;                          /* Bootstrap muted grey */
+      border: 1px solid rgba(108, 117, 125, 0.35);
+      opacity: 0.65;                 /* discreet at rest... */
+      transition: opacity 160ms ease, transform 160ms ease;
+    }
+
+    #scrollToTop:hover {
+      opacity: 1;                    /* ...fully visible on hover */
+      color: #212529;
     }
   </style>
 </head>
@@ -155,9 +165,9 @@ BASE_TEMPLATE = """<!doctype html>
 </article>
   </main>
 
-<button id="scrollToTop" class="btn btn-primary shadow" type="button"
+<button id="scrollToTop" type="button"
         aria-label="Scroll to top" title="Back to top">
-  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14"
        fill="currentColor" viewBox="0 0 16 16" aria-hidden="true">
     <path fill-rule="evenodd"
           d="M7.646 4.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1-.708.708L8 5.707l-5.646 5.647a.5.5 0 0 1-.708-.708l6-6z"/>

@@ -256,15 +256,14 @@ def build_queries() -> dict:
         # round.season_id -> season.year.
         "tbl_multi_winner_races": (
             "raw", """
-            SELECT sn.year, rnd.name AS grand_prix, COUNT(*) AS n_winners
-            FROM session ses
-            JOIN session_entry se ON se.session_id = ses.id
-            JOIN round rnd        ON rnd.id = ses.round_id
-            JOIN season sn        ON sn.id = rnd.season_id
-            WHERE ses.type = 'R' AND se.position = 1
-            GROUP BY sn.year, rnd.name
+            SELECT
+            se.session_id,
+            COUNT(*) AS n_winners
+            FROM session_entry AS se
+            WHERE se.position = 1
+            GROUP BY se.session_id
             HAVING COUNT(*) > 1
-            ORDER BY sn.year""", "table"),
+            ORDER BY se.session_id""", "table"),
 
         # Year + circuit view over the flattened results (R:
         # results %>% group_by(year, circuit) %>% filter(position == 1) ...)

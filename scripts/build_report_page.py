@@ -374,7 +374,7 @@ def build_queries() -> dict:
             "ana", """
             SELECT resultId, positionOrder, points, year, circuit,
                    driverName, driverAge, constructorName
-            FROM f1_result_summary.sql
+            FROM f1_result_summary
             LIMIT 6""", "table"),
     }
 

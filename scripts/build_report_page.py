@@ -370,7 +370,7 @@ def build_queries() -> dict:
         "tbl_team_nat_corr_head": (
             "ana", "SELECT * FROM team_nationality_corrections LIMIT 6",
             "table"),
-        "tbl_f1summary_head": (
+        "tbl_f1resultsummary_head": (
             "ana", """
             SELECT resultId, positionOrder, points, year, circuit,
                    driverName, driverAge, constructorName

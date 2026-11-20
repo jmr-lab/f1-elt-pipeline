@@ -151,7 +151,7 @@ models:
       - unique:
           column_name: "(season_id || '-' || team_id)"
 
-  - name: f1summary
+  - name: f1_result_summary
     description: "Race results enriched with driver and constructor nationality."
     columns:
       - name: resultId

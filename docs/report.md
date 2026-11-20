@@ -704,7 +704,7 @@ are listed below.
 An extract of the view illustrates the outcome: each row combines result,
 context and human-readable attributes into a single, display-ready record.
 
-{{ tbl_f1summary_head }}
+{{ tbl_f1resultsummary_head }}
 
 Two details of the view deserve emphasis. First, the nationality columns
 (`driverNationality`, `constructorNationality`) are **not** a verbatim copy

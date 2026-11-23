@@ -207,9 +207,11 @@ CREATE TEMP VIEW results_flat AS
 SELECT
   se.id,
   sn.year,
+  re.round_id,
   rnd.name            AS circuit,
   TRIM(COALESCE(d.forename, '') || ' ' || COALESCE(d.surname, '')) AS driver,
   t.name              AS team,
+  re.car_number,
   se.position,
   se.points,
   se.detail,
@@ -346,6 +348,42 @@ def build_queries() -> dict:
               AND rf.circuit = 'Monaco Grand Prix'
             ORDER BY rf.position""", "table"),
 
+        # -- More than two cars per constructor ------------------------------
+        # Distinct car numbers per (year, round, team), aggregated directly
+        # from results_flat — the port of the R cars_per_race chain.
+        "tbl_cars_per_race_extremes": (
+            "raw", """
+            SELECT year, circuit, team, n_cars FROM (
+              SELECT year, round_id, circuit, team,
+                     COUNT(DISTINCT car_number) AS n_cars
+              FROM results_flat
+              WHERE car_number IS NOT NULL
+              GROUP BY year, round_id, team
+            )
+            WHERE n_cars > 2
+            ORDER BY n_cars DESC, year, circuit
+            LIMIT 15""", "table"),
+
+        "mean_cars_per_race": (
+            "raw", """
+            WITH cars_per_race AS (
+              SELECT year, round_id, team,
+                     COUNT(DISTINCT car_number) AS n_cars
+              FROM results_flat
+              WHERE car_number IS NOT NULL
+              GROUP BY year, round_id, team
+            )
+            SELECT ROUND(AVG(n_cars), 2) FROM cars_per_race""", "scalar"),
+
+        "max_cars_per_race": (
+            "raw", """
+            SELECT MAX(cnt) FROM (
+              SELECT COUNT(DISTINCT car_number) AS cnt
+              FROM results_flat
+              WHERE car_number IS NOT NULL
+              GROUP BY year, round_id, team
+            )""", "scalar"),
+      
         # -- Classification / points correspondence -----------------------------
         # Fastest-lap bonus on retired cars; includes Moss, France 1959 (DQ).
         "tbl_unclassified_scorers": (

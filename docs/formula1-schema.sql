@@ -35,6 +35,7 @@ CREATE TABLE countries(
   country_code TEXT,
   country TEXT
 );
+CREATE TABLE "countries_lookup" (country_code TEXT,country TEXT);
 CREATE TABLE driver(
   id INT,
   reference TEXT,

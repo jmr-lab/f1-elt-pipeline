@@ -3,6 +3,7 @@ F1 Star Schema Database Builder
 
 Normalizes extracted CSV files into SQLite database with
 proper relationships matching the Jolpica schema.
+dbt seed CSV files are loaded into a separate resources.db.
 """
 
 from pathlib import Path
@@ -46,11 +47,16 @@ def get_db_folder() -> Path:
     db_folder.mkdir(parents=True, exist_ok=True)
     return db_folder
 
+def get_seeds_folder() -> Path:
+    """Return the dbt seeds folder containing static CSV files."""
+    src_folder = Path(__file__).resolve().parent
+    return src_folder.parent / "dbt" / "seeds"
+
 def create_complete_schema(conn: sqlite3.Connection) -> None:
     """Create the normalized F1 database schema with FK constraints."""
-    
+
     conn.execute("PRAGMA foreign_keys = OFF;")
-    
+
     schema_sql = """
     -- Dimension tables (created first)
     CREATE TABLE IF NOT EXISTS season (
@@ -60,7 +66,7 @@ def create_complete_schema(conn: sqlite3.Connection) -> None:
         championship_system_id INTEGER,
         wikipedia TEXT
     );
-    
+
     CREATE TABLE IF NOT EXISTS circuit (
         id INTEGER PRIMARY KEY,
         name TEXT,
@@ -74,7 +80,7 @@ def create_complete_schema(conn: sqlite3.Connection) -> None:
         wikipedia TEXT,
         api_id INTEGER
     );
-    
+
     CREATE TABLE IF NOT EXISTS driver (
         id INTEGER PRIMARY KEY,
         reference TEXT,
@@ -88,7 +94,7 @@ def create_complete_schema(conn: sqlite3.Connection) -> None:
         wikipedia TEXT,
         api_id INTEGER
     );
-    
+
     CREATE TABLE IF NOT EXISTS team (
         id INTEGER PRIMARY KEY,
         name TEXT,
@@ -100,7 +106,7 @@ def create_complete_schema(conn: sqlite3.Connection) -> None:
         wikipedia TEXT,
         api_id INTEGER
     );
-    
+
     -- Fact tables WITH FK constraints
     CREATE TABLE IF NOT EXISTS round (
         id INTEGER PRIMARY KEY,
@@ -116,7 +122,7 @@ def create_complete_schema(conn: sqlite3.Connection) -> None:
         FOREIGN KEY (season_id) REFERENCES season(id),
         FOREIGN KEY (circuit_id) REFERENCES circuit(id)
     );
-    
+
     CREATE TABLE IF NOT EXISTS team_driver (
         id INTEGER PRIMARY KEY,
         season_id INTEGER,
@@ -128,7 +134,7 @@ def create_complete_schema(conn: sqlite3.Connection) -> None:
         FOREIGN KEY (team_id) REFERENCES team(id),
         FOREIGN KEY (driver_id) REFERENCES driver(id)
     );
-    
+
     CREATE TABLE IF NOT EXISTS roundentry (
         id INTEGER PRIMARY KEY,
         round_id INTEGER,
@@ -138,7 +144,7 @@ def create_complete_schema(conn: sqlite3.Connection) -> None:
         FOREIGN KEY (round_id) REFERENCES round(id),
         FOREIGN KEY (team_driver_id) REFERENCES team_driver(id)
     );
-    
+
     CREATE TABLE IF NOT EXISTS session (
         id INTEGER PRIMARY KEY,
         round_id INTEGER,
@@ -153,7 +159,7 @@ def create_complete_schema(conn: sqlite3.Connection) -> None:
         api_id INTEGER,
         FOREIGN KEY (round_id) REFERENCES round(id)
     );
-    
+
     CREATE TABLE IF NOT EXISTS session_entry (
         id INTEGER PRIMARY KEY,
         session_id INTEGER,
@@ -172,7 +178,7 @@ def create_complete_schema(conn: sqlite3.Connection) -> None:
         FOREIGN KEY (session_id) REFERENCES session(id),
         FOREIGN KEY (round_entry_id) REFERENCES roundentry(id)
     );
-    
+
     CREATE TABLE IF NOT EXISTS driver_championship (
         id INTEGER PRIMARY KEY,
         season_id INTEGER,
@@ -193,7 +199,7 @@ def create_complete_schema(conn: sqlite3.Connection) -> None:
         FOREIGN KEY (round_id) REFERENCES round(id),
         FOREIGN KEY (session_id) REFERENCES session(id)
     );
-    
+
     CREATE TABLE IF NOT EXISTS team_championship (
         id INTEGER PRIMARY KEY,
         season_id INTEGER,
@@ -210,7 +216,7 @@ def create_complete_schema(conn: sqlite3.Connection) -> None:
         session_number INTEGER,
         round_number INTEGER
     );
-    
+
     CREATE TABLE IF NOT EXISTS lap (
         id INTEGER PRIMARY KEY,
         session_entry_id INTEGER,
@@ -223,7 +229,7 @@ def create_complete_schema(conn: sqlite3.Connection) -> None:
         api_id INTEGER,
         FOREIGN KEY (session_entry_id) REFERENCES session_entry(id)
     );
-    
+
     CREATE TABLE IF NOT EXISTS pit_stop (
         id INTEGER PRIMARY KEY,
         session_entry_id INTEGER,
@@ -235,7 +241,7 @@ def create_complete_schema(conn: sqlite3.Connection) -> None:
         FOREIGN KEY (lap_id) REFERENCES lap(id)
         FOREIGN KEY (session_entry_id) REFERENCES session_entry(id)
     );
-    
+
     CREATE TABLE IF NOT EXISTS penalty (
         id INTEGER PRIMARY KEY,
         earned_id INTEGER,
@@ -246,13 +252,13 @@ def create_complete_schema(conn: sqlite3.Connection) -> None:
         time TEXT,
         api_id INTEGER
     );
-    
+
     CREATE TABLE IF NOT EXISTS base_team (
         id INTEGER PRIMARY KEY,
         name TEXT,
         api_id INTEGER
     );
-    
+
     CREATE TABLE IF NOT EXISTS points_system (
         id INTEGER PRIMARY KEY,
         name TEXT,
@@ -266,7 +272,7 @@ def create_complete_schema(conn: sqlite3.Connection) -> None:
         is_double_points INTEGER,
         api_id INTEGER
     );
-    
+
     CREATE TABLE IF NOT EXISTS championship_system (
         id INTEGER PRIMARY KEY,
         name TEXT,
@@ -279,7 +285,7 @@ def create_complete_schema(conn: sqlite3.Connection) -> None:
         eligibility TEXT,
         api_id INTEGER
     );
-    
+
     CREATE TABLE IF NOT EXISTS championship_adjustment (
         id INTEGER PRIMARY KEY,
         adjustment INTEGER,
@@ -288,14 +294,6 @@ def create_complete_schema(conn: sqlite3.Connection) -> None:
         points REAL,
         season_id INTEGER,
         team_id INTEGER
-    );
-
-    CREATE TABLE IF NOT EXISTS _countries_lookup (
-        id INTEGER PRIMARY KEY,
-        country_code TEXT UNIQUE,
-        country TEXT,
-        iso_alpha3 TEXT,
-        continent TEXT
     );
 
     -- Indexes
@@ -311,11 +309,8 @@ def create_complete_schema(conn: sqlite3.Connection) -> None:
     CREATE INDEX IF NOT EXISTS idx_team_driver_driver ON team_driver(driver_id);
     CREATE INDEX IF NOT EXISTS idx_team_driver_team ON team_driver(team_id);
     """
-    
-    conn.executescript(schema_sql)
-    
-    # REMOVED: FK re-enabling here (now controlled solely by build_f1_db)
 
+    conn.executescript(schema_sql)
 
 def insert_table_data(
     conn: sqlite3.Connection,
@@ -323,9 +318,9 @@ def insert_table_data(
     df: pd.DataFrame
 ) -> int:
     """Insert data from DataFrame into table - preserves schema with FK constraints."""
-    
+
     target_table = TABLE_NAME_MAPPING.get(table_name, table_name)
-    
+
     # Get DB schema columns
     try:
         cursor = conn.execute(f"PRAGMA table_info({target_table});")
@@ -333,25 +328,24 @@ def insert_table_data(
     except Exception as e:
         print(f"{table_name}: Failed to get DB schema: {e}")
         return 0
-    
+
     csv_columns = set(df.columns)
-    
+
     # Filter to only columns that exist in both
     cols_to_use = list(db_columns & csv_columns)
-    
+
     if not cols_to_use:
         print(f"{table_name}: NO matching columns between CSV and DB!")
         print(f" CSV columns: {sorted(csv_columns)}")
         print(f" DB columns:  {sorted(db_columns)}")
         return 0
-    
+
     # Create filtered dataframe with matching columns
     df_subset = df[cols_to_use]
-    
+
     # Attempt insertion
     try:
         df_subset.to_sql(target_table, conn, if_exists='append', index=False)
-        # REMOVED print here (only print once in caller loop)
         return len(df_subset)
     except Exception as e:
         print(f"{table_name}: Insertion failed: {type(e).__name__}: {e}")
@@ -360,166 +354,190 @@ def insert_table_data(
         print(f" Matching columns: {cols_to_use}")
         raise
 
-
 def get_table_processing_order(dataframes: Dict[str, pd.DataFrame]) -> list:
     """
     Return tables in dependency order for FK-safe data insertion.
-    
-    Order rationale:
-    1. Independent dimension tables (no FKs needed)
-    2. Dimension tables with minimal FKs
-    3. Core fact tables (need dimensions loaded)
-    4. Transactional tables (need all upstream tables loaded)
     """
-    
+
     # Define explicit dependency hierarchy using CANONICAL names only
     table_order = [
         # Level 1: Independent tables (load first)
         'season', 'circuit', 'driver', 'team', 'base_team',
         'points_system', 'championship_system',
-        
+
         # Level 2: Depends on Level 1
         'round', 'team_driver',
-        
+
         # Level 3: Depends on Levels 1-2
         'roundentry', 'session',
-        
+
         # Level 4: Depends on Levels 1-3
         'session_entry', 'driver_championship', 'team_championship',
-        
+
         # Level 5: Detail tables (depend on session_entry existing)
         'lap', 'pit_stop', 'penalty',
-        
+
         # Level 6: Special lookup tables
         'championship_adjustment'
     ]
-    
+
     # Filter to only tables that exist in our data
     available_tables = set(dataframes.keys())
     ordered = [t for t in table_order if t in available_tables]
-    
+
     # Add any tables not in our predefined order (edge case fallback)
     remaining = available_tables - set(ordered)
     ordered.extend(sorted(remaining))
-    
-    return ordered
 
+    return ordered
 
 def filter_empty_tables(dataframes: Dict[str, pd.DataFrame]) -> Dict[str, pd.DataFrame]:
     """Filter out empty DataFrames from processing."""
     return {name: df for name, df in dataframes.items() if not df.empty}
 
-def load_static_resources(conn: sqlite3.Connection) -> None:
-    """Load static lookup tables from the dbt seeds folder."""
-    seeds_folder = Path(__file__).resolve().parent.parent / "dbt" / "seeds"
+def build_resources_db(seeds_folder: Path = None, output_db_path: Path = None) -> Path:
+    """Load all CSV files from the dbt seeds folder into a separate
+    resources database (one table per CSV, named after the file)."""
+
+    if seeds_folder is None:
+        seeds_folder = get_seeds_folder()
+
+    if output_db_path is None:
+        output_db_path = get_db_folder() / "resources.db"
 
     if not seeds_folder.exists():
-        print("dbt/seeds folder not found, skipping static loads")
-        return
+        print(f"Seeds folder not found at {seeds_folder}, skipping resources build")
+        return output_db_path
 
-    # Countries lookup
-    countries_csv = seeds_folder / "countries_lookup.csv"
-    if countries_csv.exists():
-        print(f"Loading country lookup from {countries_csv}...")
-        df = pd.read_csv(countries_csv)
+    csv_files = sorted(seeds_folder.glob("*.csv"))
 
-        # Get matching columns
-        cursor = conn.execute("PRAGMA table_info(_countries_lookup);")
-        db_columns = {row[1] for row in cursor.fetchall()}
-        csv_columns = set(df.columns)
-        cols_to_use = list(db_columns & csv_columns)
+    if not csv_files:
+        print(f"No CSV files found in {seeds_folder}, skipping resources build")
+        return output_db_path
 
-        if cols_to_use:
-            df_subset = df[cols_to_use]
-            df_subset.to_sql('_countries_lookup', conn, if_exists='replace', index=False)
-            print(f"  Loaded {len(df_subset)} country mappings")
-        else:
-            print("  WARNING: No matching columns between CSV and DB schema")
-    else:
-        print("Countries lookup file not found")
+    print("\n" + "=" * 60)
+    print("Building Resources Database")
+    print("=" * 60)
+    print(f"Folder: {seeds_folder}")
+    print(f"Output: {output_db_path}\n")
+
+    # Recreate the database fresh on every build
+    if output_db_path.exists():
+        output_db_path.unlink()
+        print(f"Cleared existing database: {output_db_path}")
+
+    conn = sqlite3.connect(str(output_db_path))
+
+    try:
+        tables_loaded = 0
+        total_rows = 0
+
+        for csv_file in csv_files:
+            table_name = csv_file.stem  # filename without .csv extension
+
+            try:
+                df = pd.read_csv(csv_file)
+                df.to_sql(table_name, conn, if_exists='replace', index=False)
+                print(f"  {table_name}: {len(df):,} rows")
+                tables_loaded += 1
+                total_rows += len(df)
+            except Exception as e:
+                print(f"  {table_name}: ERROR - {type(e).__name__}: {str(e)[:150]}")
+
+        conn.commit()
+
+        print(f"\nResources database complete")
+        print(f"Output: {output_db_path.absolute()}")
+        print(f"Tables loaded: {tables_loaded}/{len(csv_files)}")
+        print(f"Total rows: {total_rows:,}")
+
+        return output_db_path
+
+    finally:
+        conn.close()
 
 def build_f1_db(
     extracted_data_path: Path = None,
     output_db_path: Path = None
 ) -> Path:
     """Build the normalized F1 database with FK-safe ordering."""
-    
+
     # Setup paths
     if extracted_data_path is None:
         extracted_data_path = get_extracted_data_path()
-    
+
     if output_db_path is None:
         db_folder = get_db_folder()
         output_db_path = db_folder / "jolpica.db"
-    
+
     if not extracted_data_path.exists():
         raise FileNotFoundError(
             f"Extracted data not found at {extracted_data_path}. "
             "Please run extract.py first."
         )
-    
+
     if output_db_path.exists():
         output_db_path.unlink()
         print(f"Cleared existing database: {output_db_path}")
-    
+
     print(f"\n{'='*60}")
     print("Building F1 Star Schema Database")
     print(f"{'='*60}\n")
-    
+
     print(f"Loading extracted data from: {extracted_data_path}")
     with open(extracted_data_path, "rb") as f:
         dataframes = pickle.load(f)
-    
+
     # FILTER EMPTY FIRST
     dataframes = filter_empty_tables(dataframes)
-    
+
     # CRITICAL: Normalize all table names to canonical form
     dataframes = {TABLE_NAME_MAPPING.get(k, k): df for k, df in dataframes.items()}
-    
+
     print(f"Found {len(dataframes)} non-empty tables to process\n")
-    
+
     # Get correct table order (now using canonical names)
     ordered_tables = get_table_processing_order(dataframes)
     print(f"Processing order ({len(ordered_tables)} tables):\n  {' → '.join(ordered_tables)}\n")
-    
+
     conn = sqlite3.connect(str(output_db_path))
-    
+
     # Disable FK during load
     conn.execute("PRAGMA foreign_keys = OFF;")
-    
+
     try:
         print("Creating database schema...")
         create_complete_schema(conn)
-        
+
         print("\nInserting data into tables:\n")
         tables_processed = 0
-        
+
         # Process in dependency order
         for table_name in ordered_tables:
             df = dataframes[table_name]
-            
+
             try:
                 row_count = insert_table_data(conn, table_name, df)
-                
+
                 if row_count > 0:
                     print(f" {table_name}: {row_count:,} rows")
                     tables_processed += 1
                 else:
                     print(f" {table_name}: No matching columns or zero rows")
-                    
+
             except Exception as e:
                 print(f" {table_name}: ERROR - {type(e).__name__}: {str(e)[:150]}")
-        
+
         conn.commit()
-        
+
         # NOW enable FK enforcement and verify
         print("\n" + "-"*60)
         print("Post-load FK validation:")
         print("-"*60)
-        
+
         conn.execute("PRAGMA foreign_keys = ON;")
         violations = conn.execute("PRAGMA foreign_key_check;").fetchall()
-        
+
         if violations:
             print(f"Found {len(violations)} FK violation(s):")
             for v in violations[:10]:
@@ -528,19 +546,12 @@ def build_f1_db(
                 print(f"    ... and {len(violations) - 10} more")
         else:
             print("All foreign key constraints validated successfully")
-        
-        # Load static resources AFTER all tables are populated
-        print("\n" + "-"*60)
-        print("Loading static resource tables:")
-        print("-"*60)
-
-        load_static_resources(conn)
 
         # Summary
         print("\n" + "-"*60)
         print("Final table row counts:")
         print("-"*60)
-        
+
         cursor = conn.execute("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name")
         total_rows = 0
         for (table,) in cursor.fetchall():
@@ -550,49 +561,63 @@ def build_f1_db(
                 print(f"  {table}: {count:,} rows")
             else:
                 print(f"  {table}: empty")
-        
+
         print(f"\nDatabase creation complete")
         print(f"Output: {output_db_path.absolute()}")
         print(f"Total rows: {total_rows:,}")
         print(f"Tables loaded: {tables_processed}/{len(dataframes)}")
-        
+
         return output_db_path
-        
+
     finally:
         conn.close()
 
-
 if __name__ == "__main__":
     import argparse
-    
+
     parser = argparse.ArgumentParser(
         description="Build F1 Star Schema Database"
     )
     parser.add_argument("--input", type=str, default=None, help="Path to extracted_data.pkl")
     parser.add_argument("--output", type=str, default=None, help="Path to output database")
-    parser.add_argument("--clean", action="store_true", help="Remove existing database")
-    
+    parser.add_argument("--seeds-folder", type=str, default=None,
+                        help="Folder containing seed CSV files (default: dbt/seeds)")
+    parser.add_argument("--resources-output", type=str, default=None,
+                        help="Path to output resources database")
+    parser.add_argument("--skip-resources", action="store_true",
+                        help="Skip building the resources database")
+    parser.add_argument("--clean", action="store_true", help="Remove existing databases")
+
     args = parser.parse_args()
-    
+
     db_path = Path(args.output) if args.output else Path("output/jolpica.db")
-    
+
     if args.clean:
-        if db_path.exists():
-            print(f"Removing: {db_path}")
-            db_path.unlink()
-    
+        for p in [db_path, Path(args.resources_output) if args.resources_output else None]:
+            if p and p.exists():
+                print(f"Removing: {p}")
+                p.unlink()
+
     try:
         # Build the star schema database
         result = build_f1_db(
             extracted_data_path=Path(args.input) if args.input else None,
             output_db_path=Path(args.output) if args.output else None
         )
-        
+
         print("Database build complete")
         print(f"Location: {result.absolute()}")
 
+        # Build the separate resources database from dbt seeds
+        if not args.skip_resources:
+            resources_path = build_resources_db(
+                seeds_folder=Path(args.seeds_folder) if args.seeds_folder else None,
+                output_db_path=Path(args.resources_output) if args.resources_output else None
+            )
+            print(f"Resources database: {resources_path.absolute()}")
+
         sys.exit(0)
-        
+
     except Exception as e:
         print(f"\n Error: {e}")
         sys.exit(1)

@@ -5,7 +5,6 @@ sources:
     description: "Raw jolpica Formula 1 database (read-only source)."
     schema: jolpica
     tables:
-      - name: _countries_lookup
       - name: base_team
       - name: championship_adjustment
       - name: championship_system
@@ -24,3 +23,9 @@ sources:
       - name: team
       - name: team_championship
       - name: team_driver
+
+  - name: resources
+    description: "Static lookup tables (dbt seeds published from resources.db)."
+    schema: resources
+    tables:
+      - name: countries_lookup

@@ -2,9 +2,9 @@
 
 -- VIEW: f1_season_summary (one row per driver-season)
 --   Full standings per season: every driver with their constructor,
---   countries, age, season points, max cumulative championship
---   points, standings position (by max cumul points), and titles
---   won strictly before that season.
+--   countries, age, season points, wins, podiums, country flag image,
+--   max cumulative championship points, standings position (by max
+--   cumul points), and titles won strictly before that season.
 --   Constructor = the team where the driver scored most points
 --   that season.
 --   Note: sqlite sorts NULLs last for DESC, so NULLS LAST is implicit.
@@ -18,6 +18,7 @@ WITH res AS (
                                     AS driverName,
         d.date_of_birth             AS date_of_birth,
         td.team_id                  AS team_id,
+        se.position                 AS position_raw,
         se.points                   AS points,
         dc.points                   AS cumulPoints
     FROM {{ ref('session_entry') }} se
@@ -109,6 +110,10 @@ season_agg AS (
         driverName,
         MIN(date_of_birth)          AS date_of_birth,
         SUM(points)                 AS total_points,
+        SUM(CASE WHEN TRY_CAST(position_raw AS INTEGER) = 1
+                 THEN 1 ELSE 0 END) AS wins,
+        SUM(CASE WHEN TRY_CAST(position_raw AS INTEGER) IN (1, 2, 3)
+                 THEN 1 ELSE 0 END) AS podiums,
         MAX(cumulPoints)            AS max_cumul_points
     FROM res
     GROUP BY year, driver_id, driverName
@@ -185,11 +190,16 @@ SELECT
     r.year                                        AS season,
     r.driverName                                  AS driverName,
     dn.country                                    AS driverCountry,
+    'images/flags/icons8-' ||
+      replace(lower(dn.country), ' ', '-') || '-50.png'
+                                                  AS countryImage,
     r.year - CAST(strftime('%Y', r.date_of_birth) AS INTEGER)
                                                   AS driverAge,
     tn.name                                       AS constructorName,
     tn.country                                    AS constructorCountry,
     r.total_points                                AS total_points,
+    r.wins                                        AS wins,
+    r.podiums                                     AS podiums,
     r.max_cumul_points                            AS max_cumul_points,
     r.position                                    AS position,
     COALESCE(ph.previous_titles, 0)               AS previous_titles

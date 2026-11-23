@@ -409,26 +409,26 @@ def filter_empty_tables(dataframes: Dict[str, pd.DataFrame]) -> Dict[str, pd.Dat
     """Filter out empty DataFrames from processing."""
     return {name: df for name, df in dataframes.items() if not df.empty}
 
-def load_static_resources(src_folder: Path, conn: sqlite3.Connection) -> None:
-    """Load static lookup tables from resources folder."""
-    resources_folder = src_folder / "resources"
-    
-    if not resources_folder.exists():
-        print("Resources folder not found, skipping static loads")
+def load_static_resources(conn: sqlite3.Connection) -> None:
+    """Load static lookup tables from the dbt seeds folder."""
+    seeds_folder = Path(__file__).resolve().parent.parent / "dbt" / "seeds"
+
+    if not seeds_folder.exists():
+        print("dbt/seeds folder not found, skipping static loads")
         return
-    
+
     # Countries lookup
-    countries_csv = resources_folder / "countries_lookup.csv"
+    countries_csv = seeds_folder / "countries_lookup.csv"
     if countries_csv.exists():
         print(f"Loading country lookup from {countries_csv}...")
         df = pd.read_csv(countries_csv)
-        
+
         # Get matching columns
         cursor = conn.execute("PRAGMA table_info(_countries_lookup);")
         db_columns = {row[1] for row in cursor.fetchall()}
         csv_columns = set(df.columns)
         cols_to_use = list(db_columns & csv_columns)
-        
+
         if cols_to_use:
             df_subset = df[cols_to_use]
             df_subset.to_sql('_countries_lookup', conn, if_exists='replace', index=False)
@@ -534,8 +534,7 @@ def build_f1_db(
         print("Loading static resource tables:")
         print("-"*60)
 
-        src_folder = Path(__file__).resolve().parent
-        load_static_resources(src_folder, conn)
+        load_static_resources(conn)
 
         # Summary
         print("\n" + "-"*60)

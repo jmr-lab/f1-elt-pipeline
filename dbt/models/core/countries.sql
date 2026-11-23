@@ -4,4 +4,4 @@ SELECT
     ROW_NUMBER() OVER (ORDER BY country_code) AS id,
     country_code,
     country
-FROM {{ REF('countries_lookup') }}
+FROM {{ ref('countries_lookup') }}

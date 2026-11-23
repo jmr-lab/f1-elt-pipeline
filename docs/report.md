@@ -785,7 +785,7 @@ championship state after the final round.
 | `position`              | Final standings position, ranked by `max_cumul_points` |
 | `previous_titles`       | Titles the driver had already won strictly before that season |
 
-{{ tbl_f1season_summary_head }}
+{{ tbl_f1seasonsummary_head }}
 
 The constructor attribution deserves a note, since a driver's mid-season
 team switch would otherwise be arbitrary: the `constructorName` column

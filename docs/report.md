@@ -468,12 +468,11 @@ Indianapolis.
 
 ### Unclassified drivers who scored points {#sec-unclassified-scorers}
 
-The mirror image of the eligibility check of
-[the previous section](#sec-ineligible-scorers) concerns the classification
-flag. The naive expectation is again a strict correspondence: a driver
-flagged as unclassified — one who did not complete a sufficient portion of
-the race distance — should record zero points. The export contains a sizeable
-group of violations of exactly this shape:
+The mirror image of [the eligibility check](#sec-ineligible-scorers)
+concerns the classification flag. The naive expectation is again a strict
+correspondence: a driver flagged as unclassified — one who did not complete
+a sufficient portion of the race distance — should record zero points. The
+export contains a sizeable group of violations of exactly this shape:
 
 {{ tbl_unclassified_scorers }}
 

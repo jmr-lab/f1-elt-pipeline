@@ -110,9 +110,9 @@ season_agg AS (
         driverName,
         MIN(date_of_birth)          AS date_of_birth,
         SUM(points)                 AS total_points,
-        SUM(CASE WHEN TRY_CAST(position_raw AS INTEGER) = 1
+        SUM(CASE WHEN CAST(position_raw AS INTEGER) = 1
                  THEN 1 ELSE 0 END) AS wins,
-        SUM(CASE WHEN TRY_CAST(position_raw AS INTEGER) IN (1, 2, 3)
+        SUM(CASE WHEN CAST(position_raw AS INTEGER) IN (1, 2, 3)
                  THEN 1 ELSE 0 END) AS podiums,
         MAX(cumulPoints)            AS max_cumul_points
     FROM res

@@ -6,8 +6,8 @@
              tbl_fastest_lap_shared_rows, tbl_ineligible_scorers,
              tbl_ferrari_monaco_1956, tbl_unclassified_scorers,
              tbl_team_nationality_head, tbl_driver_nat_corr_head,
-             tbl_team_nat_corr_head, tbl_f1summary_head -->
-
+             tbl_team_nat_corr_head, tbl_f1summary_head,
+             tbl_f1seasonsummary_head, tbl_f1driversummary_head -->
 # Data quality review {#analysis}
 
 ## Source {#sec-source}
@@ -593,8 +593,9 @@ source tables map one-to-one to their analytical counterparts with no
 intermediate logic: they are renamed, stripped of `api_id`, and passed
 through. Second, the deviations from this pattern are few and concentrated —
 the nationality corrections feed two dedicated tables, the external
-fastest-lap source feeds the enriched results model, and a single derived
-view exists at present. The transformation layer is intentionally thin, and
+fastest-lap source feeds the enriched results model, and the three
+convenience views of [the convenience-views section](#sec-convenience-views)
+sit at the top of the graph. The transformation layer is intentionally thin, and
 it is expected to grow slowly: as new analytical views are added, the online
 documentation will diverge from the snapshot reproduced here, which is
 precisely why the authoritative version is published alongside the
@@ -708,7 +709,7 @@ championship history, and the "absent fastest lap" ceases to be a limitation
 of the analytical dataset — while remaining faithfully absent from the raw
 snapshot, which is never modified.
 
-## A convenience view: `f1summary` {#sec-f1summary}
+## Convenience views {#sec-convenience-views}
 
 The analytical schema is normalised: answering even a simple question —
 *who finished where, in which car, scoring how many points?* — requires
@@ -719,10 +720,12 @@ joins anew for every query or visualisation is error-prone and obscures the
 analysis itself. To make day-to-day access to the dataset frictionless, the
 transformation therefore includes **convenience views**: flat, de-normalised
 tables that pre-resolve the most common joins and expose the data ready for
-display.
+display, at three grains — one row per race result, one per driver-season,
+and one per driver.
 
-The principal view is `f1summary`, one row per race result, whose columns
-are listed below.
+### `f1_result_summary` — one row per race result {#sec-f1result-summary}
+
+The principal view, one row per race result, whose columns are listed below.
 
 | Column                  | Description |
 |-------------------------|-------------|
@@ -759,13 +762,85 @@ attributes computed during transformation — `driverAge` among them — appear
 alongside the raw passthrough columns, giving the view everything needed for
 descriptive analysis without touching the normalised tables.
 
-The view is intentionally materialised as a thin projection over the
-analytical tables rather than a replacement for them: any measure beyond its
-fixed column set (per-lap timings, pit stops, championship trajectories)
-still queries the underlying schema directly. As the transformation layer
-grows, additional views following the same pattern will be added; the online
-[dbt documentation](dbt/index.html) remains the authoritative record of what
-currently exists.
+### `f1_season_summary` — one row per driver-season {#sec-f1season-summary}
+
+The second view lifts the grain from the single race to the season: one row
+per driver per championship year, carrying the full standings picture —
+constructor attribution, countries, age, season totals and the cumulative
+championship state after the final round.
+
+| Column                  | Description |
+|-------------------------|-------------|
+| `season`                | The championship year |
+| `driverName`            | The driver's full name |
+| `driverCountry`         | The driver's nationality (season-resolved) |
+| `countryImage`          | Path of the driver's country flag image |
+| `driverAge`             | The driver's age during that season |
+| `constructorName`       | The constructor the driver scored most points for that season |
+| `constructorCountry`    | The constructor's nationality (season-resolved) |
+| `total_points`          | Championship points scored by the driver that season |
+| `wins`                  | Race wins that season |
+| `podiums`               | Podium finishes (positions 1–3) that season |
+| `max_cumul_points`      | Highest cumulative championship points reached that season |
+| `position`              | Final standings position, ranked by `max_cumul_points` |
+| `previous_titles`       | Titles the driver had already won strictly before that season |
+
+{{ tbl_f1season_summary_head }}
+
+The constructor attribution deserves a note, since a driver's mid-season
+team switch would otherwise be arbitrary: the `constructorName` column
+assigns the team **where the driver scored most of his points** that
+season, a deterministic rule that keeps the view at exactly one row per
+driver-season. The `position` column reproduces the final classification by
+ranking drivers on their best cumulative championship score (the same
+quantity the `driver_championship` table accumulates after every round),
+and `previous_titles` turns the view into a self-contained tool for
+trajectory questions — how many titles a champion already held in a given
+season, and how standings, ages and constructors distribute across
+seven decades of the championship.
+
+### `f1_driver_summary` — one row per driver {#sec-f1driver-summary}
+
+The third view compresses each career into a single row: aggregates over
+every race start, plus the world-title statistics derived from the same
+cumulative-championship logic as the season view.
+
+| Column                  | Description |
+|-------------------------|-------------|
+| `driverName`            | The driver's full name |
+| `driverCountry`         | The driver's most common nationality across seasons |
+| `countryImage`          | Path of the driver's country flag image |
+| `titles`                | Number of world championships won |
+| `title_first`           | Season of the driver's first title (NULL if none) |
+| `title_last`            | Season of the driver's most recent title (NULL if none) |
+| `wins`                  | Career race wins |
+| `races`                 | Career race starts |
+| `seasons`               | Number of distinct seasons contested |
+| `career_length`         | Alias of `seasons`, for readability |
+| `points`                | Career championship points total |
+| `career_start`          | First season contested |
+| `career_end`            | Last season contested |
+| `ratio_titles`          | Titles per season contested (3 decimals) |
+| `ratio_wins`            | Wins per race start (3 decimals) |
+| `period_start`          | Era bucket of the driver's first title (1950–1968, 1969–1993, 1994–2025) |
+
+{{ tbl_f1driversummary_head }}
+
+The view deliberately exposes both raw quantities and derived ratios: the
+latter (`ratio_titles`, `ratio_wins` and the era buckets of `period_start`)
+replicate the aggregations of the exploratory analysis directly, so that
+cross-era comparisons — heavier championships versus higher scoring rates,
+long careers versus title density — do not have to be recomputed (and
+consistently redefined) in every downstream notebook.
+
+The three views are intentionally materialised as thin projections over the
+analytical tables rather than replacements for them: any measure beyond
+their fixed column sets (per-lap timings, pit stops, round-by-round
+championship trajectories) still queries the underlying schema directly.
+The family may grow — a constructor-season counterpart is the most
+conspicuous missing grain — and the online
+[dbt documentation](dbt/index.html) remains the authoritative record of
+what currently exists.
 
 ## The resulting schema {#sec-resulting-schema}
 

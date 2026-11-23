@@ -423,6 +423,49 @@ export encodes a subtle piece of period regulation — and, since it is unique
 across the entire dataset, any transformation step can handle it as an
 explicitly documented single case rather than a systematic issue.
 
+### More than two cars per constructor {#sec-multi-car-entries}
+
+The extract of [the ineligible scorers section](#sec-ineligible-scorers)
+shows four Ferrari cars entered at the 1956 Monaco Grand Prix — a detail
+that surprises the modern reader, for whom a constructor fields exactly
+two cars per race. This observation invites a systematic check: was
+Ferrari's four-car entry a one-off, or a reflection of an era in which
+constructors routinely entered larger contingents?
+
+Counting the distinct car numbers each team fielded per race across the
+entire championship history quantifies the extent of the practice:
+
+{{ tbl_cars_per_race_extremes }}
+
+The picture is unambiguous. Multi-car entries were not an exception but
+the norm of the sport's early decades: grands prix of the 1950s regularly
+featured three, four or more cars per constructor, mirroring the same
+era whose conventions — car sharing, shared awards, retroactive points
+— were examined in the preceding sections. The practice also produced
+its extreme case: the maximum observed value, **23 cars fielded by a
+single constructor in one race**, belongs to *Kurtis-Kraft* at the
+Indianapolis 500, where the team entered a dozen or more cars in
+virtually every edition of the race during the 1950s — the Indy
+roadster era, when abundant private entries and the oval's specific
+requirements made large contingents routine.
+
+The contrast with the modern regulation — two cars per constructor,
+strictly enforced — could hardly be sharper. Yet, far from being a data
+defect, the pattern faithfully records how the sport's entry rules
+evolved: grid caps and per-constructor limits are themselves historical
+regulations, and the export reflects each period's own rules. From the
+transformation standpoint of [the next chapter](#transformation), no
+correction is called for: the multi-car entries are history, preserved
+as recorded, and analyses comparing grid sizes across eras must simply
+remain aware that the very notion of "cars entered per constructor" has
+changed meaning over the championship's seventy-plus seasons.
+
+The average — slightly above two cars per constructor per race when the
+whole history is pooled — summarises this tension: the two-car era
+dominates the sample numerically, while the multi-car practice survives
+in the record as a concentrated artefact of the first decades and of
+Indianapolis.
+
 ### Unclassified drivers who scored points {#sec-unclassified-scorers}
 
 The mirror image of the eligibility check of

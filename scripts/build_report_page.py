@@ -414,6 +414,18 @@ def build_queries() -> dict:
                    driverName, driverAge, constructorName
             FROM f1_result_summary
             LIMIT 6""", "table"),
+        "tbl_f1seasonsummary_head": (
+            "ana", """
+            SELECT season, driverName, driverCountry, driverAge,
+                   constructorName, total_points, wins, podiums, position
+            FROM f1_season_summary
+            LIMIT 6""", "table"),
+        "tbl_f1driversummary_head": (
+            "ana", """
+            SELECT driverName, driverCountry, titles, title_first,
+                   title_last, wins, races, seasons, points
+            FROM f1_driver_summary
+            LIMIT 6""", "table"),
     }
 
 # ---------------------------------------------------------------------------

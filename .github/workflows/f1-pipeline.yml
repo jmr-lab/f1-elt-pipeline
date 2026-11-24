@@ -92,6 +92,21 @@ jobs:
           if-no-files-found: error
           retention-days: 7
 
+      - name: Verify resources.db exists
+        run: |
+          test -f dist/resources.db || { echo "ERROR: dist/resources.db was not created"; ls -la dist/; exit 1; }
+          tables=$(sqlite3 dist/resources.db "SELECT COUNT(*) FROM sqlite_master WHERE type='table';")
+          echo "Resource tables: $tables"
+          [ "$tables" -gt 0 ] || { echo "ERROR: resources.db has no tables"; exit 1; }
+
+      - name: Upload resources.db
+        uses: actions/upload-artifact@v4
+        with:
+          name: resources-db
+          path: dist/resources.db
+          if-no-files-found: error
+          retention-days: 7
+
       - name: Verify outputs
         run: |
           echo "=== DB folder contents ==="
@@ -302,6 +317,12 @@ jobs:
           name: jolpica-db
           path: dist/
 
+      - name: Download resources.db
+        uses: actions/download-artifact@v4
+        with:
+          name: resources-db
+          path: dist/
+
       - name: Install dependencies
         run: pip install "databricks-sql-connector>=3.0" pandas pyarrow requests
 
@@ -309,6 +330,8 @@ jobs:
         timeout-minutes: 30
         env:
           SQLITE_PATH: dist/jolpica.db
+          RESOURCES_SQLITE_PATH: dist/resources.db
+          RESOURCES_SCHEMA: resources
           DATABRICKS_SERVER_HOSTNAME: ${{ secrets.DATABRICKS_SERVER_HOSTNAME }}
           DATABRICKS_HTTP_PATH: ${{ secrets.DATABRICKS_HTTP_PATH }}
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}

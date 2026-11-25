@@ -1,5 +1,19 @@
 version: 2
 
+seeds:
+  - name: fastestlaps_lookup
+    description: >
+      Fastest-lap-per-race lookup (1950-2025), manually maintained.
+      Driver names normalized to jolpica forms; joined to roundentry on
+      year + round + driver name + car_number.
+    columns:
+      - name: year
+        tests: [not_null]
+      - name: round
+        tests: [not_null]
+      - name: driver_name
+        tests: [not_null]
+
 models:
   - name: countries
     description: "Country lookup with a surrogate id starting at 1."
@@ -46,6 +60,32 @@ models:
           - relationships:
               to: ref('circuit')
               field: id
+
+  - name: roundentry
+    description: >
+      Race entries per round. Enriched with is_fastest_lap, sourced from
+      the fastestlaps_lookup seed (coverage 1950-2025) — fills the gaps in
+      jolpica's own fastest_lap_rank data, which is empty for the 1960s-1990s
+      and partial for the 2000s. Join is on season year, round number,
+      normalized driver name and car_number, so exactly one entry is flagged
+      per race, including the 12 shared-drive races where the same driver
+      has two entries with distinct car numbers.
+    columns:
+      - name: id
+        tests: [unique, not_null]
+      - name: round_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('round')
+              field: id
+      - name: team_driver_id
+        tests:
+          - relationships:
+              to: ref('team_driver')
+              field: id
+      - name: is_fastest_lap
+        description: "TRUE for the roundentry that set the fastest lap of the race; NULL otherwise."
 
   - name: session
     description: "Sessions with api_id removed and timestamp cast to TIMESTAMP."
@@ -162,3 +202,73 @@ models:
         tests:
           - accepted_values:
               values: ['Finished', 'Disqualified', 'Not classified', 'Lapsed', 'Not Qualified', 'Abandoned']
+
+  - name: f1_season_summary
+    description: >
+      Convenience view at driver-season grain: points, wins, podiums and
+      championship position per driver per season, with the season-resolved
+      driver nationality and the constructor with which the driver scored
+      the most points that season (deterministic rule for mid-season
+      switches). Thin projection over the core tables — not a replacement
+      for them.
+    columns:
+      - name: season
+        description: "Season year."
+        tests: [not_null]
+      - name: driverName
+        tests: [not_null]
+      - name: driverCountry
+        description: "Driver nationality resolved for that specific season."
+      - name: constructorName
+        description: "Team where the driver scored the most points this season."
+      - name: total_points
+        tests: [not_null]
+      - name: wins
+        description: "Race wins in the season."
+      - name: podiums
+        description: "Podium finishes in the season."
+      - name: max_cumul_points
+        description: "Peak cumulative points reached during the season; drives the ranking."
+      - name: position
+        description: "Championship position ranked by max_cumul_points."
+      - name: previous_titles
+        description: "Titles won by the driver before this season."
+    tests:
+      - unique:
+          column_name: "(season || '-' || driverName)"
+
+  - name: f1_driver_summary
+    description: >
+      Convenience view at driver (career) grain: titles with first/last
+      championship years, career totals, points, and precomputed ratios
+      (titles per season, wins per race) plus era bucketing of the first
+      title (1950-1968, 1969-1993, 1994-2025). One row per driver.
+    columns:
+      - name: driverName
+        tests: [unique, not_null]
+      - name: driverCountry
+        description: "Most common driver nationality across seasons."
+      - name: titles
+        description: "Championship titles won; 0 if none."
+      - name: title_first
+        description: "Year of first title; NULL for drivers without a title."
+      - name: title_last
+        description: "Year of most recent title; NULL for drivers without a title."
+      - name: wins
+        tests: [not_null]
+      - name: races
+        tests: [not_null]
+      - name: seasons
+        description: "Number of seasons the driver competed in."
+      - name: points
+        description: "Career points total."
+      - name: career_start
+        description: "First season year."
+      - name: career_end
+        description: "Last season year."
+      - name: ratio_titles
+        description: "Titles per season, rounded to 3 decimals."
+      - name: ratio_wins
+        description: "Wins per race, rounded to 3 decimals."
+      - name: period_start
+        description: "Era bucket of the first title: 1950-1968, 1969-1993 or 1994-2025."

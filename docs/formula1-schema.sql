@@ -64,6 +64,7 @@ CREATE TABLE driver_championship(
   round_number INT
 );
 CREATE TABLE "driver_nationality_corrections" (driver_id INT,season_id_start INT,season_id_end INT,country_code TEXT);
+CREATE TABLE "fastestlaps_lookup" (year INT,round INT,grand_prix TEXT,circuit TEXT,driver_country_code TEXT,driver_name TEXT,constructor TEXT,car_number INT);
 CREATE TABLE lap(
   id INT,
   session_entry_id INT,
@@ -118,7 +119,8 @@ CREATE TABLE roundentry(
   id INT,
   round_id INT,
   team_driver_id INT,
-  car_number INT
+  car_number INT,
+  is_fastest_lap
 );
 CREATE TABLE season(
   id INT,
